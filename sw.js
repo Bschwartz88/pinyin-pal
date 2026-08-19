@@ -1,5 +1,5 @@
 // Pinyin Pal service worker — cache-first app shell
-const VERSION = "pp-v0.1.0";
+const VERSION = "pp-v0.2.0";
 const ASSETS = ["./", "index.html", "app.js", "data.js", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {

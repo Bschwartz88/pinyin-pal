@@ -119,6 +119,17 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
 .notice.show{display:block}
 .backlink{background:none;border:none;color:var(--ink2);font-size:.95rem;font-weight:600;cursor:pointer;padding:4px 0;margin-bottom:8px;text-align:left}
 .confetti{position:fixed;inset:0;pointer-events:none;z-index:99}
+
+/* Phrasebook */
+.catchip{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line);background:var(--card);border-radius:999px;padding:8px 14px;font-weight:700;font-size:.88rem;cursor:pointer;white-space:nowrap}
+.catchip.on{background:var(--red);color:#fff;border-color:var(--red)}
+.catbar{display:flex;gap:8px;overflow-x:auto;padding:12px 0;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.catbar::-webkit-scrollbar{display:none}
+.wordrow{display:flex;align-items:center;gap:12px;padding:13px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+.wordrow:last-child{border-bottom:none}
+.wordrow .py{font-family:Georgia,serif;font-weight:700;font-size:1.15rem}
+.wordrow .en{color:var(--ink2);font-size:.9rem}
+.wordrow .spk{margin-left:auto;font-size:1.25rem;flex-shrink:0;opacity:.7}
 </style>
 </head>
 <body>
@@ -131,8 +142,22 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
   <!-- HOME -->
   <section class="screen active" id="screen-home">
     <h1 style="margin-top:10px">Nǐ hǎo, Brian! 👋</h1>
-    <p class="sub" id="homeSub">Master the four tones — everything else gets easier.</p>
-    <div class="gamegrid">
+    <p class="sub" id="homeSub">Real words for real conversations — with tones that sound right.</p>
+    <h2 style="margin-top:18px;font-size:1.05rem;color:var(--ink2)">📚 Words &amp; phrases</h2>
+    <div class="gamegrid" style="margin-top:10px">
+      <div class="card gamecard" data-go="words">
+        <div class="emoji" style="background:#eaf1f8">📖</div>
+        <div><span class="tag" style="background:#eaf1f8;color:var(--blue)">Learn &amp; listen</span>
+          <h2>Phrasebook</h2><div class="best" id="vocabCount">Greetings, food, shopping, connectors</div></div>
+      </div>
+      <div class="card gamecard" data-go="wordgame">
+        <div class="emoji" style="background:#f3eafa">🧩</div>
+        <div><span class="tag" style="background:#f3eafa;color:#7d4ba0">Vocabulary game</span>
+          <h2>Word Match</h2><div class="best" id="bestWords">Hear it, know it, use it</div></div>
+      </div>
+    </div>
+    <h2 style="margin-top:22px;font-size:1.05rem;color:var(--ink2)">🎵 Sound foundation</h2>
+    <div class="gamegrid" style="margin-top:10px">
       <div class="card gamecard" data-go="learn">
         <div class="emoji" style="background:#eaf1f8">🎓</div>
         <div><span class="tag" style="background:#eaf1f8;color:var(--blue)">Start here</span>
@@ -165,6 +190,11 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
     <div id="toneCards" style="margin-top:16px"></div>
   </section>
 
+  <!-- PHRASEBOOK -->
+  <section class="screen" id="screen-words"></section>
+  <!-- WORD MATCH GAME -->
+  <section class="screen" id="screen-wordgame"></section>
+
   <!-- EAR GAME -->
   <section class="screen" id="screen-ear"></section>
   <!-- SPEAK GAME -->
@@ -185,12 +215,13 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
       <div class="setrow"><div><b>Reset progress</b><div class="sub">Clears scores &amp; streak</div></div>
         <button class="btn secondary" id="resetBtn">Reset</button></div>
     </div>
-    <p class="sub" style="margin-top:16px">Pinyin Pal v0.1 · Stage 1 · All progress stays on this device.</p>
+    <p class="sub" style="margin-top:16px">Pinyin Pal v0.2 · Stage 1 · All progress stays on this device.</p>
   </section>
 
   <nav class="nav">
     <button data-go="home" class="active"><span class="ico">🏮</span>Home</button>
-    <button data-go="learn"><span class="ico">🎓</span>Learn</button>
+    <button data-go="words"><span class="ico">📖</span>Phrases</button>
+    <button data-go="learn"><span class="ico">🎓</span>Tones</button>
     <button data-go="settings"><span class="ico">⚙️</span>Settings</button>
   </nav>
 </div>

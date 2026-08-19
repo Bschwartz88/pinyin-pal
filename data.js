@@ -111,6 +111,88 @@ const PAIRS = [
   { a: { hz: "个", py: "gè", en: "(measure word)" }, b: { hz: "课", py: "kè", en: "class" }, note: "k has a puff of air; g doesn't" },
 ];
 
+// ===== Vocabulary track: useful words & phrases (pinyin display, hanzi for TTS only) =====
+const VOCAB = [
+  { cat: "Greetings & basics", icon: "👋", words: [
+    { hz: "你好", py: "nǐ hǎo", en: "hello" },
+    { hz: "你好吗", py: "nǐ hǎo ma?", en: "how are you?" },
+    { hz: "我很好", py: "wǒ hěn hǎo", en: "I'm very good" },
+    { hz: "谢谢", py: "xièxie", en: "thank you" },
+    { hz: "不客气", py: "bú kèqi", en: "you're welcome" },
+    { hz: "再见", py: "zàijiàn", en: "goodbye" },
+    { hz: "请", py: "qǐng", en: "please" },
+    { hz: "对不起", py: "duìbuqǐ", en: "sorry" },
+    { hz: "没关系", py: "méi guānxi", en: "no problem / it's OK" },
+    { hz: "早上好", py: "zǎoshang hǎo", en: "good morning" },
+    { hz: "晚安", py: "wǎn'ān", en: "good night" },
+    { hz: "是", py: "shì", en: "yes / to be" },
+    { hz: "不是", py: "bú shì", en: "no / is not" } ]},
+  { cat: "Meeting people", icon: "🤝", words: [
+    { hz: "我叫布莱恩", py: "wǒ jiào Brian", en: "my name is Brian" },
+    { hz: "你叫什么名字", py: "nǐ jiào shénme míngzi?", en: "what's your name?" },
+    { hz: "很高兴认识你", py: "hěn gāoxìng rènshi nǐ", en: "nice to meet you" },
+    { hz: "我是美国人", py: "wǒ shì Měiguó rén", en: "I'm American" },
+    { hz: "你说英文吗", py: "nǐ shuō Yīngwén ma?", en: "do you speak English?" },
+    { hz: "我听不懂", py: "wǒ tīng bù dǒng", en: "I don't understand" },
+    { hz: "请再说一遍", py: "qǐng zài shuō yí biàn", en: "please say it again" },
+    { hz: "慢一点", py: "màn yìdiǎn", en: "a little slower" },
+    { hz: "好的", py: "hǎo de", en: "OK / sure" },
+    { hz: "我学中文", py: "wǒ xué Zhōngwén", en: "I'm learning Chinese" },
+    { hz: "朋友", py: "péngyou", en: "friend" },
+    { hz: "你呢", py: "nǐ ne?", en: "and you?" } ]},
+  { cat: "Food & restaurant", icon: "🥟", words: [
+    { hz: "吃饭", py: "chī fàn", en: "to eat (a meal)" },
+    { hz: "喝", py: "hē", en: "to drink" },
+    { hz: "茶", py: "chá", en: "tea" },
+    { hz: "水", py: "shuǐ", en: "water" },
+    { hz: "米饭", py: "mǐfàn", en: "rice" },
+    { hz: "面条", py: "miàntiáo", en: "noodles" },
+    { hz: "饺子", py: "jiǎozi", en: "dumplings" },
+    { hz: "牛肉", py: "niúròu", en: "beef" },
+    { hz: "鸡肉", py: "jīròu", en: "chicken (meat)" },
+    { hz: "菜", py: "cài", en: "dish / vegetable" },
+    { hz: "好吃", py: "hǎochī", en: "delicious" },
+    { hz: "我要这个", py: "wǒ yào zhè ge", en: "I want this one" },
+    { hz: "菜单", py: "càidān", en: "menu" },
+    { hz: "买单", py: "mǎidān", en: "the check, please" },
+    { hz: "干杯", py: "gānbēi", en: "cheers!" },
+    { hz: "我吃饱了", py: "wǒ chī bǎo le", en: "I'm full" },
+    { hz: "辣", py: "là", en: "spicy" },
+    { hz: "不要辣", py: "bú yào là", en: "not spicy, please" } ]},
+  { cat: "Shopping & numbers", icon: "🛍️", words: [
+    { hz: "多少钱", py: "duōshǎo qián?", en: "how much money?" },
+    { hz: "太贵了", py: "tài guì le", en: "too expensive!" },
+    { hz: "便宜一点", py: "piányi yìdiǎn", en: "a little cheaper?" },
+    { hz: "一", py: "yī", en: "one" },
+    { hz: "二", py: "èr", en: "two" },
+    { hz: "三", py: "sān", en: "three" },
+    { hz: "四", py: "sì", en: "four" },
+    { hz: "五", py: "wǔ", en: "five" },
+    { hz: "六", py: "liù", en: "six" },
+    { hz: "七", py: "qī", en: "seven" },
+    { hz: "八", py: "bā", en: "eight" },
+    { hz: "九", py: "jiǔ", en: "nine" },
+    { hz: "十", py: "shí", en: "ten" },
+    { hz: "块", py: "kuài", en: "yuan (money unit)" },
+    { hz: "这个", py: "zhè ge", en: "this one" },
+    { hz: "那个", py: "nà ge", en: "that one" },
+    { hz: "有吗", py: "yǒu ma?", en: "do you have it?" },
+    { hz: "没有", py: "méi yǒu", en: "don't have / there isn't" } ]},
+  { cat: "Connectors & glue words", icon: "🔗", words: [
+    { hz: "和", py: "hé", en: "and" },
+    { hz: "也", py: "yě", en: "also" },
+    { hz: "可是", py: "kěshì", en: "but" },
+    { hz: "因为", py: "yīnwèi", en: "because" },
+    { hz: "所以", py: "suǒyǐ", en: "so / therefore" },
+    { hz: "然后", py: "ránhòu", en: "then / after that" },
+    { hz: "现在", py: "xiànzài", en: "now" },
+    { hz: "以后", py: "yǐhòu", en: "later" },
+    { hz: "还", py: "hái", en: "still / in addition" },
+    { hz: "都", py: "dōu", en: "all / both" },
+    { hz: "很", py: "hěn", en: "very" },
+    { hz: "一点", py: "yìdiǎn", en: "a little" } ]},
+];
+
 // Coach lines — varied so it never feels canned.
 const PRAISE = [
   "Piàoliang! (Beautiful!) 🎉", "Hěn hǎo! (Very good!) ✨", "Nailed it! 🎯",
@@ -128,4 +210,4 @@ const TONE_EXPLAIN = {
   4: "Falls sharply, like a firm “No!”",
 };
 
-if (typeof module !== "undefined") module.exports = { TONES, FAMILIES, SPEAK_TARGETS, PAIRS };
+if (typeof module !== "undefined") module.exports = { TONES, FAMILIES, SPEAK_TARGETS, PAIRS, VOCAB };
