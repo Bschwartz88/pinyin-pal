@@ -193,7 +193,7 @@ function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
 }
 
 /* ---- router ---- */
-const screens = ["home", "learn", "ear", "speak", "pairs", "settings"];
+const screens = ["home", "learn", "ear", "speak", "pairs", "settings", "words", "wordgame"];
 function go(name) {
   screens.forEach(s => $("#screen-" + s).classList.toggle("active", s === name));
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.go === name));
@@ -202,6 +202,8 @@ function go(name) {
   if (name === "ear") EarGame.start();
   if (name === "speak") SpeakGame.enter();
   if (name === "pairs") PairsGame.start();
+  if (name === "words") renderWords();
+  if (name === "wordgame") WordGame.start();
   if (name === "home") renderHome();
   window.scrollTo(0, 0);
 }
@@ -212,10 +214,115 @@ document.body.addEventListener("click", e => {
 
 function renderHome() {
   showStreak();
-  const be = store.get("bestEar", null), bp = store.get("bestPairs", null);
+  const be = store.get("bestEar", null), bp = store.get("bestPairs", null), bw = store.get("bestWords", null);
   if (be !== null) $("#bestEar").textContent = `Best: ${be}/10`;
   if (bp !== null) $("#bestPairs").textContent = `Best: ${bp}/10`;
+  if (bw !== null) $("#bestWords").textContent = `Best: ${bw}/10`;
+  const n = VOCAB.reduce((a, c) => a + c.words.length, 0);
+  $("#vocabCount").textContent = `${n} words & phrases to explore`;
 }
+
+/* ---- Phrasebook ---- */
+let wordsCat = 0;
+function renderWords() {
+  const scr = $("#screen-words");
+  const cat = VOCAB[wordsCat];
+  scr.innerHTML = `
+    <h2 style="margin-top:8px">📖 Phrasebook</h2>
+    <p class="sub">Tap any phrase to hear it — then say it back out loud. 🐢 replays slowly.</p>
+    <div class="catbar">${VOCAB.map((c, i) =>
+      `<span class="catchip${i === wordsCat ? " on" : ""}" data-cat="${i}">${c.icon} ${c.cat}</span>`).join("")}</div>
+    <div class="card" style="padding:6px 16px">
+      ${cat.words.map((w, i) => `
+        <div class="wordrow" data-w="${i}">
+          <div><div class="py">${w.py}</div><div class="en">${w.en}</div></div>
+          <span class="spk" data-slow="${i}" style="margin-left:auto">🐢</span>
+          <span class="spk" style="margin-left:10px">🔊</span>
+        </div>`).join("")}
+    </div>`;
+  scr.querySelectorAll(".catchip").forEach(ch =>
+    ch.addEventListener("click", () => { wordsCat = +ch.dataset.cat; renderWords(); }));
+  scr.querySelectorAll(".wordrow").forEach(row =>
+    row.addEventListener("click", e => {
+      const w = cat.words[+row.dataset.w];
+      const slow = e.target.dataset && e.target.dataset.slow !== undefined;
+      TTSm.speak(w.hz, { rate: slow ? 0.5 : 0.8 });
+    }));
+}
+
+/* ---- Word Match game ---- */
+const WordGame = {
+  round: 0, score: 0, total: 10, current: null, mode: "listen",
+  pool() { return VOCAB.flatMap(c => c.words); },
+  start() { this.round = 0; this.score = 0; this.next(); },
+  next() {
+    this.round++;
+    if (this.round > this.total) return this.finish();
+    const all = shuffle(this.pool());
+    this.current = all[0];
+    const distractors = all.slice(1, 4);
+    this.mode = Math.random() < 0.5 ? "listen" : "read";
+    const options = shuffle([this.current, ...distractors]);
+    const scr = $("#screen-wordgame");
+    const prompt = this.mode === "listen"
+      ? `<p class="sub">Round ${this.round} of ${this.total} — what does it mean?</p>
+         <button class="btn jade big" id="wgPlay" style="margin-top:14px">🔊 Play the word</button>`
+      : `<p class="sub">Round ${this.round} of ${this.total} — how do you say…</p>
+         <div class="bigword" style="margin:12px 0"><div style="font-size:1.7rem;font-weight:800">“${this.current.en}”</div></div>`;
+    scr.innerHTML = `
+      <button class="backlink" data-go="home">‹ Quit</button>
+      <div class="game-head"><h2>🧩 Word Match</h2><div class="score">${this.score} ⭐</div></div>
+      <div class="progressbar"><div style="width:${((this.round - 1) / this.total) * 100}%"></div></div>
+      <div class="card" style="text-align:center;padding:26px">
+        ${prompt}
+        <div class="choices" id="wgChoices" style="grid-template-columns:1fr 1fr">
+          ${options.map((o, i) => this.mode === "listen"
+            ? `<div class="choice" data-i="${i}" style="font-size:.98rem">${o.en}</div>`
+            : `<div class="choice" data-i="${i}"><span class="pinyin" style="font-size:1.25rem">${o.py}</span></div>`).join("")}
+        </div>
+        <div class="feedback" id="wgFb"></div>
+      </div>`;
+    this.options = options;
+    this.answered = false;
+    if (this.mode === "listen") {
+      $("#wgPlay").addEventListener("click", () => TTSm.speak(this.current.hz, { rate: 0.75 }));
+      setTimeout(() => TTSm.speak(this.current.hz, { rate: 0.75 }), 350);
+    }
+    scr.querySelectorAll("#wgChoices .choice").forEach(el =>
+      el.addEventListener("click", () => this.answer(+el.dataset.i, el)));
+  },
+  answer(i, el) {
+    if (this.answered) return;
+    this.answered = true;
+    const ok = this.options[i] === this.current;
+    el.classList.add(ok ? "correct" : "wrong");
+    if (!ok) {
+      const rightIdx = this.options.indexOf(this.current);
+      $(`#wgChoices .choice[data-i="${rightIdx}"]`).classList.add("correct");
+    }
+    if (ok) this.score++;
+    $(".game-head .score").textContent = `${this.score} ⭐`;
+    if (this.mode === "read") TTSm.speak(this.current.hz, { rate: 0.8 });
+    $("#wgFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) +
+      `<div class="detail"><b class="pinyin">${this.current.py}</b> = ${this.current.en}</div>`;
+    setTimeout(() => this.next(), ok ? 1500 : 2700);
+  },
+  finish() {
+    bumpStreak(); showStreak();
+    const best = Math.max(store.get("bestWords", 0), this.score);
+    store.set("bestWords", best);
+    $("#screen-wordgame").innerHTML = `
+      <div class="roundend card">
+        <div style="font-size:3rem">${this.score >= 8 ? "🏆" : this.score >= 5 ? "🎉" : "💪"}</div>
+        <div class="bigscore">${this.score}/${this.total}</div>
+        <p class="sub" style="margin:8px 0 4px">${this.score >= 8 ? "Nǐ tài bàng le! (You're amazing!)" : "Every round plants a few more words."}</p>
+        <p class="sub">Best: ${best}/${this.total}</p>
+        <div class="btn-row"><button class="btn" id="wgAgain">Play again</button>
+        <button class="btn secondary" data-go="home">Home</button></div>
+      </div>`;
+    $("#wgAgain").addEventListener("click", () => this.start());
+  },
+};
 
 /* ---- Learn screen ---- */
 function renderLearn() {
