@@ -1,0 +1,7 @@
+{
+  "name": "pinyin-pal",
+  "version": "0.3.0",
+  "private": true,
+  "description": "Personal Mandarin learning web app — pinyin only.",
+  "scripts": { "test": "node test.js" }
+}
