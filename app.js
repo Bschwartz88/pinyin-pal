@@ -1,4 +1,4 @@
-// ============ Pinyin Pal — app logic (Stage 1) ============
+// ============ Pinyin Pal — app logic ============
 "use strict";
 
 /* ---------------- Pure functions (also unit-tested in Node) ---------------- */
@@ -193,119 +193,301 @@ function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
 }
 
 /* ---- router ---- */
-const screens = ["home", "learn", "ear", "speak", "pairs", "settings", "words", "wordgame"];
-function go(name) {
+const screens = ["home", "lessons", "lesson", "lessonquiz", "words", "wordgame", "build", "learn", "ear", "speak", "pairs", "settings"];
+const NAV_FOR = { lesson: "lessons", lessonquiz: "lessons", build: "wordgame" };
+function go(name, arg) {
   screens.forEach(s => $("#screen-" + s).classList.toggle("active", s === name));
-  document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.go === name));
+  const navName = NAV_FOR[name] || name;
+  document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.go === navName));
   speechSynthesis.cancel();
+  if (name === "home") renderHome();
+  if (name === "lessons") renderLessons();
+  if (name === "lesson") renderLesson(arg);
+  if (name === "lessonquiz") LessonQuiz.start(arg);
+  if (name === "words") renderWords(arg);
+  if (name === "wordgame") WordGame.pick();
+  if (name === "build") BuildGame.pick();
   if (name === "learn") renderLearn();
   if (name === "ear") EarGame.start();
   if (name === "speak") SpeakGame.enter();
   if (name === "pairs") PairsGame.start();
-  if (name === "words") renderWords();
-  if (name === "wordgame") WordGame.start();
-  if (name === "home") renderHome();
   window.scrollTo(0, 0);
 }
 document.body.addEventListener("click", e => {
   const t = e.target.closest("[data-go]");
-  if (t) go(t.dataset.go);
+  if (t) go(t.dataset.go, t.dataset.arg);
 });
+
+/* ---- lesson progress ---- */
+const Progress = {
+  scores() { return store.get("lessonScores", {}); },
+  score(id) { return this.scores()[id]; },
+  isDone(id) { const s = this.score(id); return s !== undefined && s >= LessonQuiz.passMark; },
+  record(id, score) {
+    const all = this.scores();
+    all[id] = Math.max(all[id] || 0, score);
+    store.set("lessonScores", all);
+  },
+  nextLesson() { return LESSONS.find(l => !this.isDone(l.id)) || null; },
+  doneCount() { return LESSONS.filter(l => this.isDone(l.id)).length; },
+  learnedPhrases() { return LESSONS.filter(l => this.isDone(l.id)).flatMap(l => l.phrases); },
+};
 
 function renderHome() {
   showStreak();
-  const be = store.get("bestEar", null), bp = store.get("bestPairs", null), bw = store.get("bestWords", null);
+  const be = store.get("bestEar", null), bp = store.get("bestPairs", null), bw = store.get("bestWords", null), bb = store.get("bestBuild", null);
   if (be !== null) $("#bestEar").textContent = `Best: ${be}/10`;
   if (bp !== null) $("#bestPairs").textContent = `Best: ${bp}/10`;
   if (bw !== null) $("#bestWords").textContent = `Best: ${bw}/10`;
+  if (bb !== null) $("#bestBuild").textContent = `Best: ${bb}/${BuildGame.total}`;
   const n = VOCAB.reduce((a, c) => a + c.words.length, 0);
-  $("#vocabCount").textContent = `${n} words & phrases to explore`;
+  $("#vocabCount").textContent = `${n} words & phrases`;
+  const done = Progress.doneCount();
+  $("#lessonCount").textContent = done ? `${done} of ${LESSONS.length} lessons done` : `${LESSONS.length} short lessons`;
+  const next = Progress.nextLesson();
+  const box = $("#homeContinue");
+  if (next) {
+    const idx = LESSONS.indexOf(next) + 1;
+    box.innerHTML = `
+      <div class="card continue" data-go="lesson" data-arg="${next.id}">
+        <div class="emoji" style="font-size:2rem">${next.emoji}</div>
+        <div><span class="tag" style="background:#fdf3e3;color:#b07d1e">${done ? "Continue" : "Start here"}</span>
+          <h2>Lesson ${idx}: ${next.title}</h2><div class="best">${next.phrases.length} phrases · about 5 minutes</div></div>
+        <div class="go">Go ›</div>
+      </div>`;
+  } else {
+    box.innerHTML = `<div class="card continue" data-go="wordgame">
+        <div class="emoji" style="font-size:2rem">🏆</div>
+        <div><h2>All lessons done!</h2><div class="best">Keep the words fresh with the games.</div></div>
+        <div class="go">Play ›</div></div>`;
+  }
 }
 
-/* ---- Phrasebook ---- */
-let wordsCat = 0;
-function renderWords() {
-  const scr = $("#screen-words");
-  const cat = VOCAB[wordsCat];
-  scr.innerHTML = `
-    <h2 style="margin-top:8px">📖 Phrasebook</h2>
-    <p class="sub">Tap any phrase to hear it — then say it back out loud. 🐢 replays slowly.</p>
-    <div class="catbar">${VOCAB.map((c, i) =>
-      `<span class="catchip${i === wordsCat ? " on" : ""}" data-cat="${i}">${c.icon} ${c.cat}</span>`).join("")}</div>
-    <div class="card" style="padding:6px 16px">
-      ${cat.words.map((w, i) => `
-        <div class="wordrow" data-w="${i}">
-          <div><div class="py">${w.py}</div><div class="en">${w.en}</div></div>
-          <span class="spk" data-slow="${i}" style="margin-left:auto">🐢</span>
-          <span class="spk" style="margin-left:10px">🔊</span>
-        </div>`).join("")}
+/* ---- Lessons list ---- */
+function renderLessons() {
+  const next = Progress.nextLesson();
+  $("#screen-lessons").innerHTML = `
+    <h2 style="margin-top:8px">🎓 Lessons</h2>
+    <p class="sub">Each lesson explains a handful of everyday phrases, then checks you with a short “Try it”. Go in order — later lessons build on earlier ones.</p>
+    <div class="card" style="padding:6px 12px;margin-top:14px">
+      ${LESSONS.map((l, i) => {
+        const done = Progress.isDone(l.id), sc = Progress.score(l.id);
+        return `<div class="lessonrow${l === next ? " next" : ""}" data-go="lesson" data-arg="${l.id}">
+          <div class="num">${l.emoji}</div>
+          <div><div class="ttl">${i + 1}. ${l.title}</div>
+            <div class="meta">${l.phrases.length} phrases${sc !== undefined ? ` · Try it: ${sc}/${LessonQuiz.total}` : ""}${l === next ? " · <b style='color:#b07d1e'>up next</b>" : ""}</div></div>
+          <div class="done">${done ? "✓" : "›"}</div>
+        </div>`; }).join("")}
     </div>`;
-  scr.querySelectorAll(".catchip").forEach(ch =>
-    ch.addEventListener("click", () => { wordsCat = +ch.dataset.cat; renderWords(); }));
-  scr.querySelectorAll(".wordrow").forEach(row =>
+}
+
+/* ---- Lesson reader ---- */
+function phraseRow(w, i) {
+  const parts = w.parts && w.parts.length > 1
+    ? `<div class="parts">${w.parts.map(p => `<span class="part"><b>${p[0]}</b> ${p[1]}</span>`).join("")}</div>` : "";
+  return `
+    <div class="phrase" data-w="${i}">
+      <div style="flex:1"><div class="py">${w.py}</div><div class="en">${w.en}</div>${parts}
+        ${w.tip ? `<div class="tip">💡 ${w.tip}</div>` : ""}</div>
+      <div class="spk"><span>🔊</span><span data-slow="1">🐢</span></div>
+    </div>`;
+}
+function wirePhraseRows(scr, words) {
+  scr.querySelectorAll(".phrase").forEach(row =>
     row.addEventListener("click", e => {
-      const w = cat.words[+row.dataset.w];
+      const w = words[+row.dataset.w];
       const slow = e.target.dataset && e.target.dataset.slow !== undefined;
       TTSm.speak(w.hz, { rate: slow ? 0.5 : 0.8 });
     }));
 }
+function renderLesson(id) {
+  const l = LESSONS.find(x => x.id === id) || LESSONS[0];
+  const idx = LESSONS.indexOf(l);
+  const scr = $("#screen-lesson");
+  scr.innerHTML = `
+    <button class="backlink" data-go="lessons">‹ Lessons</button>
+    <div style="display:flex;align-items:center;gap:10px"><span style="font-size:2rem">${l.emoji}</span>
+      <div><div class="sub">Lesson ${idx + 1} of ${LESSONS.length}${Progress.isDone(l.id) ? " · <span class='pill'>✓ done</span>" : ""}</div><h2>${l.title}</h2></div></div>
+    <p class="sub" style="margin-top:12px;line-height:1.5">${l.intro}</p>
+    <p class="sub" style="margin-top:10px"><b>Tap a phrase to hear it, then say it out loud.</b> 🐢 plays it slowly. The small labels show what each word means.</p>
+    <div class="card" style="padding:4px 14px;margin-top:14px">${l.phrases.map(phraseRow).join("")}</div>
+    ${l.notes && l.notes.length ? `<h2 class="section-h">💡 How it works</h2>` : ""}
+    ${(l.notes || []).map(n => `<div class="note"><b>${n.title}</b>${n.body}</div>`).join("")}
+    <div class="card" style="margin-top:18px;text-align:center">
+      <h2>Ready to try it?</h2>
+      <p class="sub" style="margin:6px 0 14px">${LessonQuiz.total} quick questions using only this lesson's phrases. Get ${LessonQuiz.passMark} right to mark it done.</p>
+      <button class="btn big" data-go="lessonquiz" data-arg="${l.id}">✏️ Try it</button>
+      ${idx + 1 < LESSONS.length ? `<div style="margin-top:12px"><button class="btn secondary" style="width:100%" data-go="lesson" data-arg="${LESSONS[idx + 1].id}">Skip to Lesson ${idx + 2} ›</button></div>` : ""}
+    </div>`;
+  wirePhraseRows(scr, l.phrases);
+}
 
-/* ---- Word Match game ---- */
-const WordGame = {
-  round: 0, score: 0, total: 10, current: null, mode: "listen",
-  pool() { return VOCAB.flatMap(c => c.words); },
-  start() { this.round = 0; this.score = 0; this.next(); },
+/* ---- Phrasebook ---- */
+let wordsCat = 0;
+function renderWords(catId) {
+  if (catId) { const i = VOCAB.findIndex(c => c.lessonId === catId); if (i >= 0) wordsCat = i; }
+  const scr = $("#screen-words");
+  const cat = VOCAB[wordsCat];
+  scr.innerHTML = `
+    <h2 style="margin-top:8px">📖 Phrasebook</h2>
+    <p class="sub">Every phrase from every lesson. Tap to hear it; 🐢 replays slowly.</p>
+    <div class="catbar">${VOCAB.map((c, i) =>
+      `<span class="catchip${i === wordsCat ? " on" : ""}" data-cat="${i}">${c.icon} ${c.cat}</span>`).join("")}</div>
+    <div class="card" style="padding:4px 14px">${cat.words.map(phraseRow).join("")}</div>
+    ${cat.lessonId ? `<p class="sub" style="margin-top:12px;text-align:center"><button class="backlink" data-go="lesson" data-arg="${cat.lessonId}">Open the lesson for these phrases ›</button></p>` : ""}`;
+  scr.querySelectorAll(".catchip").forEach(ch =>
+    ch.addEventListener("click", () => { wordsCat = +ch.dataset.cat; renderWords(); }));
+  wirePhraseRows(scr, cat.words);
+}
+
+/* ---- Shared quiz plumbing ---- */
+// Multiple-choice round: listen→meaning or English→pinyin, distractors from the same lesson.
+function lessonOf(phrase) { return LESSONS.find(l => l.phrases.includes(phrase)); }
+function distractorsFor(phrase, pool, n) {
+  const les = lessonOf(phrase);
+  let cands = les ? les.phrases.filter(p => p !== phrase && p.en !== phrase.en && p.py !== phrase.py) : [];
+  if (cands.length < n) cands = pool.filter(p => p !== phrase && p.en !== phrase.en && p.py !== phrase.py);
+  return shuffle(cands).slice(0, n);
+}
+function quizShell(scr, { title, back, round, total, score, body }) {
+  scr.innerHTML = `
+    <button class="backlink" data-go="${back}" ${back === "lesson" ? "" : ""}>‹ Quit</button>
+    <div class="game-head"><h2>${title}</h2><div class="score">${score} ⭐</div></div>
+    <div class="progressbar"><div style="width:${((round - 1) / total) * 100}%"></div></div>
+    <div class="card" style="text-align:center;padding:26px">${body}</div>`;
+}
+function choiceRound(game, scr, { title, back }) {
+  const cur = game.current;
+  const options = shuffle([cur, ...distractorsFor(cur, game.pool, 3)]);
+  game.options = options; game.answered = false;
+  game.mode = Math.random() < 0.5 ? "listen" : "read";
+  const prompt = game.mode === "listen"
+    ? `<p class="sub">Round ${game.round} of ${game.total} — what does it mean?</p>
+       <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button>`
+    : `<p class="sub">Round ${game.round} of ${game.total} — how do you say…</p>
+       <div class="bigword" style="margin:12px 0"><div style="font-size:1.6rem;font-weight:800">“${cur.en}”</div></div>`;
+  quizShell(scr, { title, back, round: game.round, total: game.total, score: game.score, body: `${prompt}
+      <div class="choices" id="qChoices">
+        ${options.map((o, i) => game.mode === "listen"
+          ? `<div class="choice" data-i="${i}" style="font-size:.98rem">${o.en}</div>`
+          : `<div class="choice" data-i="${i}"><span class="pinyin" style="font-size:1.2rem">${o.py}</span></div>`).join("")}
+      </div>
+      <div class="feedback" id="qFb"></div>` });
+  if (game.mode === "listen") {
+    $("#qPlay").addEventListener("click", () => TTSm.speak(cur.hz, { rate: 0.75 }));
+    setTimeout(() => TTSm.speak(cur.hz, { rate: 0.75 }), 350);
+  }
+  scr.querySelectorAll("#qChoices .choice").forEach(el =>
+    el.addEventListener("click", () => {
+      if (game.answered) return;
+      game.answered = true;
+      const ok = options[+el.dataset.i] === cur;
+      el.classList.add(ok ? "correct" : "wrong");
+      if (!ok) $(`#qChoices .choice[data-i="${options.indexOf(cur)}"]`).classList.add("correct");
+      if (ok) game.score++;
+      $(".game-head .score").textContent = `${game.score} ⭐`;
+      if (game.mode === "read") TTSm.speak(cur.hz, { rate: 0.8 });
+      $("#qFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) +
+        `<div class="detail"><b class="pinyin">${cur.py}</b> = ${cur.en}</div>`;
+      setTimeout(() => game.next(), ok ? 1400 : 2700);
+    }));
+}
+// Pick N distinct phrases from a pool, favouring variety.
+function pickRounds(pool, n) {
+  const s = shuffle(pool);
+  const out = s.slice(0, n);
+  while (out.length < n && pool.length) out.push(rnd(pool));
+  return out;
+}
+
+/* ---- Lesson "Try it" quiz ---- */
+const LessonQuiz = {
+  total: 6, passMark: 4, lesson: null, pool: [], queue: [], round: 0, score: 0, current: null,
+  start(id) {
+    this.lesson = LESSONS.find(l => l.id === id) || LESSONS[0];
+    this.pool = this.lesson.phrases;
+    this.queue = pickRounds(this.pool, this.total);
+    this.round = 0; this.score = 0; this.next();
+  },
   next() {
     this.round++;
     if (this.round > this.total) return this.finish();
-    const all = shuffle(this.pool());
-    this.current = all[0];
-    const distractors = all.slice(1, 4);
-    this.mode = Math.random() < 0.5 ? "listen" : "read";
-    const options = shuffle([this.current, ...distractors]);
-    const scr = $("#screen-wordgame");
-    const prompt = this.mode === "listen"
-      ? `<p class="sub">Round ${this.round} of ${this.total} — what does it mean?</p>
-         <button class="btn jade big" id="wgPlay" style="margin-top:14px">🔊 Play the word</button>`
-      : `<p class="sub">Round ${this.round} of ${this.total} — how do you say…</p>
-         <div class="bigword" style="margin:12px 0"><div style="font-size:1.7rem;font-weight:800">“${this.current.en}”</div></div>`;
-    scr.innerHTML = `
-      <button class="backlink" data-go="home">‹ Quit</button>
-      <div class="game-head"><h2>🧩 Word Match</h2><div class="score">${this.score} ⭐</div></div>
-      <div class="progressbar"><div style="width:${((this.round - 1) / this.total) * 100}%"></div></div>
-      <div class="card" style="text-align:center;padding:26px">
-        ${prompt}
-        <div class="choices" id="wgChoices" style="grid-template-columns:1fr 1fr">
-          ${options.map((o, i) => this.mode === "listen"
-            ? `<div class="choice" data-i="${i}" style="font-size:.98rem">${o.en}</div>`
-            : `<div class="choice" data-i="${i}"><span class="pinyin" style="font-size:1.25rem">${o.py}</span></div>`).join("")}
-        </div>
-        <div class="feedback" id="wgFb"></div>
-      </div>`;
-    this.options = options;
-    this.answered = false;
-    if (this.mode === "listen") {
-      $("#wgPlay").addEventListener("click", () => TTSm.speak(this.current.hz, { rate: 0.75 }));
-      setTimeout(() => TTSm.speak(this.current.hz, { rate: 0.75 }), 350);
-    }
-    scr.querySelectorAll("#wgChoices .choice").forEach(el =>
-      el.addEventListener("click", () => this.answer(+el.dataset.i, el)));
+    this.current = this.queue[this.round - 1];
+    choiceRound(this, $("#screen-lessonquiz"), { title: `✏️ ${this.lesson.title}`, back: "lessons" });
   },
-  answer(i, el) {
-    if (this.answered) return;
-    this.answered = true;
-    const ok = this.options[i] === this.current;
-    el.classList.add(ok ? "correct" : "wrong");
-    if (!ok) {
-      const rightIdx = this.options.indexOf(this.current);
-      $(`#wgChoices .choice[data-i="${rightIdx}"]`).classList.add("correct");
-    }
-    if (ok) this.score++;
-    $(".game-head .score").textContent = `${this.score} ⭐`;
-    if (this.mode === "read") TTSm.speak(this.current.hz, { rate: 0.8 });
-    $("#wgFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) +
-      `<div class="detail"><b class="pinyin">${this.current.py}</b> = ${this.current.en}</div>`;
-    setTimeout(() => this.next(), ok ? 1500 : 2700);
+  finish() {
+    bumpStreak(); showStreak();
+    Progress.record(this.lesson.id, this.score);
+    const passed = this.score >= this.passMark;
+    const idx = LESSONS.indexOf(this.lesson), nxt = LESSONS[idx + 1];
+    $("#screen-lessonquiz").innerHTML = `
+      <div class="roundend card">
+        <div style="font-size:3rem">${passed ? (this.score === this.total ? "🏆" : "🎉") : "💪"}</div>
+        <div class="bigscore">${this.score}/${this.total}</div>
+        <p class="sub" style="margin:8px 0 4px">${passed
+          ? `Lesson done! <b>${this.lesson.title}</b> is in the bag.`
+          : `Almost — read through the lesson once more and try again.`}</p>
+        <div class="btn-row" style="flex-direction:column">
+          ${passed && nxt ? `<button class="btn" data-go="lesson" data-arg="${nxt.id}">Next: ${nxt.emoji} ${nxt.title} ›</button>` : ""}
+          ${passed && !nxt ? `<button class="btn" data-go="wordgame">Play the games ›</button>` : ""}
+          ${!passed ? `<button class="btn" data-go="lesson" data-arg="${this.lesson.id}">Review the lesson</button>` : ""}
+          <button class="btn secondary" data-go="lessonquiz" data-arg="${this.lesson.id}">Try again</button>
+          <button class="btn secondary" data-go="lessons">All lessons</button>
+        </div>
+      </div>`;
+  },
+};
+
+/* ---- Scope picker shared by the games ---- */
+function scopePool(scope) {
+  if (scope === "learned") { const p = Progress.learnedPhrases(); return p.length >= 8 ? p : LESSONS.flatMap(l => l.phrases); }
+  if (scope === "all") return LESSONS.flatMap(l => l.phrases);
+  const l = LESSONS.find(x => x.id === scope);
+  return l ? l.phrases : LESSONS.flatMap(x => x.phrases);
+}
+function renderPicker(scr, { title, emoji, blurb, other, otherLabel, storeKey, onStart }) {
+  const learnedN = Progress.learnedPhrases().length;
+  let scope = store.get(storeKey, learnedN >= 8 ? "learned" : "all");
+  const draw = () => {
+    scr.innerHTML = `
+      <h2 style="margin-top:8px">${emoji} ${title}</h2>
+      <p class="sub">${blurb}</p>
+      <p class="sub" style="margin-top:14px"><b>Which words?</b></p>
+      <div class="catbar" style="flex-wrap:wrap">
+        <span class="catchip${scope === "learned" ? " on" : ""}" data-s="learned">✓ Lessons I've finished${learnedN ? ` (${learnedN})` : ""}</span>
+        <span class="catchip${scope === "all" ? " on" : ""}" data-s="all">📚 Everything</span>
+        ${LESSONS.map(l => `<span class="catchip${scope === l.id ? " on" : ""}" data-s="${l.id}">${l.emoji} ${l.title}</span>`).join("")}
+      </div>
+      ${scope === "learned" && learnedN < 8 ? `<p class="sub">Finish a couple of lessons first and this option will use just those words. For now it uses everything.</p>` : ""}
+      <button class="btn big" id="pkStart" style="margin-top:12px">▶︎ Start</button>
+      <p style="margin-top:14px;text-align:center"><button class="backlink" data-go="${other}">${otherLabel} ›</button></p>`;
+    scr.querySelectorAll(".catchip").forEach(c => c.addEventListener("click", () => { scope = c.dataset.s; store.set(storeKey, scope); draw(); }));
+    $("#pkStart").addEventListener("click", () => onStart(scope));
+  };
+  draw();
+}
+
+/* ---- Word Match game ---- */
+const WordGame = {
+  round: 0, score: 0, total: 10, current: null, pool: [], queue: [], scope: "all",
+  pick() {
+    renderPicker($("#screen-wordgame"), {
+      title: "Word Match", emoji: "🧩",
+      blurb: "Hear a phrase and pick its meaning — or see the English and pick the pinyin. The wrong answers come from the same lesson, so it's a real test.",
+      other: "build", otherLabel: "Or play Build the Sentence", storeKey: "wgScope",
+      onStart: s => this.start(s),
+    });
+  },
+  start(scope) {
+    this.scope = scope || this.scope; this.pool = scopePool(this.scope);
+    this.queue = pickRounds(this.pool, this.total);
+    this.round = 0; this.score = 0; this.next();
+  },
+  next() {
+    this.round++;
+    if (this.round > this.total) return this.finish();
+    this.current = this.queue[this.round - 1];
+    choiceRound(this, $("#screen-wordgame"), { title: "🧩 Word Match", back: "wordgame" });
   },
   finish() {
     bumpStreak(); showStreak();
@@ -318,9 +500,96 @@ const WordGame = {
         <p class="sub" style="margin:8px 0 4px">${this.score >= 8 ? "Nǐ tài bàng le! (You're amazing!)" : "Every round plants a few more words."}</p>
         <p class="sub">Best: ${best}/${this.total}</p>
         <div class="btn-row"><button class="btn" id="wgAgain">Play again</button>
-        <button class="btn secondary" data-go="home">Home</button></div>
+        <button class="btn secondary" data-go="wordgame">Change words</button></div>
       </div>`;
     $("#wgAgain").addEventListener("click", () => this.start());
+  },
+};
+
+/* ---- Build the Sentence game ---- */
+const BuildGame = {
+  round: 0, score: 0, total: 8, current: null, pool: [], queue: [], scope: "all", placed: [], tiles: [],
+  pick() {
+    renderPicker($("#screen-build"), {
+      title: "Build the Sentence", emoji: "🧱",
+      blurb: "See the English, then tap the word tiles in the right order to build the Chinese. One tile is a decoy — leave it out.",
+      other: "wordgame", otherLabel: "Or play Word Match", storeKey: "bdScope",
+      onStart: s => this.start(s),
+    });
+  },
+  buildable(pool) {
+    let p = pool.filter(w => w.parts && w.parts.length >= 3);
+    if (p.length < 5) p = pool.filter(w => w.parts && w.parts.length >= 2);
+    if (p.length < 5) p = LESSONS.flatMap(l => l.phrases).filter(w => w.parts && w.parts.length >= 3);
+    return p;
+  },
+  start(scope) {
+    this.scope = scope || this.scope; this.pool = this.buildable(scopePool(this.scope));
+    this.queue = pickRounds(this.pool, this.total);
+    this.round = 0; this.score = 0; this.next();
+  },
+  next() {
+    this.round++;
+    if (this.round > this.total) return this.finish();
+    const cur = this.current = this.queue[this.round - 1];
+    const target = cur.parts.map(p => p[0]);
+    // one decoy tile from another phrase, not already in the target
+    const others = this.pool.filter(w => w !== cur).flatMap(w => w.parts.map(p => p[0])).filter(t => !target.includes(t));
+    const decoy = others.length ? rnd(others) : null;
+    this.tiles = shuffle(decoy ? [...target, decoy] : [...target]).map((t, i) => ({ t, i }));
+    this.placed = []; this.answered = false;
+    quizShell($("#screen-build"), { title: "🧱 Build it", back: "build", round: this.round, total: this.total, score: this.score, body: `
+      <p class="sub">Round ${this.round} of ${this.total} — build this in Chinese:</p>
+      <div class="bigword" style="margin:12px 0"><div style="font-size:1.5rem;font-weight:800">“${cur.en}”</div></div>
+      <div class="slots" id="bdSlots"></div>
+      <div class="tiles" id="bdTiles"></div>
+      <div class="feedback" id="bdFb"><span class="sub">Tap the tiles in order. Tap a placed tile to put it back.</span></div>
+      <button class="btn secondary" id="bdHear" style="margin-top:8px">🔊 Hear it</button>` });
+    $("#bdHear").addEventListener("click", () => TTSm.speak(cur.hz, { rate: 0.75 }));
+    this.draw();
+  },
+  draw() {
+    const slots = $("#bdSlots"), tiles = $("#bdTiles");
+    slots.innerHTML = this.placed.map(i => `<span class="tile" data-p="${i}">${this.tiles[i].t}</span>`).join("");
+    tiles.innerHTML = this.tiles.map(x => `<span class="tile${this.placed.includes(x.i) ? " used" : ""}" data-t="${x.i}">${x.t}</span>`).join("");
+    if (this.answered) return;
+    tiles.querySelectorAll(".tile").forEach(el => el.addEventListener("click", () => {
+      this.placed.push(+el.dataset.t); this.draw();
+      if (this.placed.length === this.current.parts.length) this.check();
+    }));
+    slots.querySelectorAll(".tile").forEach(el => el.addEventListener("click", () => {
+      this.placed = this.placed.filter(i => i !== +el.dataset.p); this.draw();
+    }));
+  },
+  check() {
+    this.answered = true;
+    const cur = this.current;
+    const got = this.placed.map(i => this.tiles[i].t).join(" ");
+    const want = cur.parts.map(p => p[0]).join(" ");
+    const ok = got === want;
+    $("#bdSlots").classList.add(ok ? "correct" : "wrong");
+    if (ok) this.score++;
+    $(".game-head .score").textContent = `${this.score} ⭐`;
+    TTSm.speak(cur.hz, { rate: 0.8 });
+    $("#bdFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) +
+      `<div class="detail"><b class="pinyin">${cur.py}</b> — ${cur.parts.map(p => `${p[0]} (${p[1]})`).join(" · ")}</div>`;
+    this.draw();
+    setTimeout(() => this.next(), ok ? 1800 : 3600);
+  },
+  finish() {
+    bumpStreak(); showStreak();
+    const best = Math.max(store.get("bestBuild", 0), this.score);
+    store.set("bestBuild", best);
+    $("#screen-build").innerHTML = `
+      <div class="roundend card">
+        <div style="font-size:3rem">${this.score >= 7 ? "🏆" : this.score >= 4 ? "🎉" : "💪"}</div>
+        <div class="bigscore">${this.score}/${this.total}</div>
+        <p class="sub" style="margin:8px 0 4px">${this.score >= 7 ? "You're building real sentences now." : "Word order is a muscle — it grows with reps."}</p>
+        <p class="sub">Best: ${best}/${this.total}</p>
+        <div class="btn-row"><button class="btn" id="bdAgain">Play again</button>
+        <button class="btn secondary" data-go="build">Change words</button></div>
+      </div>`;
+    $("#bdAgain").addEventListener("click", () => this.start());
   },
 };
 
@@ -574,8 +843,12 @@ renderHome();
 // iOS: voices often load only after first interaction
 document.body.addEventListener("touchstart", () => { if (!TTSm.voices.length) TTSm.load(); }, { once: true });
 
-// Service worker
+// Service worker: registers, and reloads once when a new version has been installed.
 if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshing) return; refreshing = true; location.reload();
+  });
+  navigator.serviceWorker.register("sw.js").then(reg => reg.update().catch(() => {})).catch(() => {});
 }
 }
