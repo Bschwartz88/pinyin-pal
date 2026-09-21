@@ -74,7 +74,70 @@ function classifyTone(c) {
   return { tone: 1, conf: 0.3 };
 }
 
-if (typeof module !== "undefined") { module.exports = { autoCorrelate, normalizeContour, classifyTone }; }
+// HTML entity escaping helper to defend against XSS
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Validates and sanitizes imported backup data against a strict schema.
+// Returns a sanitized object with only allowed keys and validated values, or null if invalid.
+function validateBackupData(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return null;
+
+  const sanitized = {};
+  const allowedKeys = new Set([
+    "streak", "lastDay", "rate", "voiceURI", "lessonScores",
+    "bestEar", "bestPairs", "bestWords", "bestBuild", "speakIdx",
+    "wgScope", "bdScope"
+  ]);
+
+  for (const k of Object.keys(data)) {
+    if (!allowedKeys.has(k)) continue;
+    const v = data[k];
+
+    if (k === "streak") {
+      if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 100000) sanitized[k] = v;
+    } else if (k === "lastDay") {
+      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) sanitized[k] = v;
+    } else if (k === "rate") {
+      if (typeof v === "number" && !Number.isNaN(v) && v >= 0.1 && v <= 2.0) sanitized[k] = Math.round(v * 10) / 10;
+    } else if (k === "voiceURI") {
+      if (typeof v === "string" && v.length <= 256) sanitized[k] = v;
+    } else if (k === "lessonScores") {
+      if (v && typeof v === "object" && !Array.isArray(v)) {
+        const scores = {};
+        for (const lesId of Object.keys(v)) {
+          if (lesId === "__proto__" || lesId === "constructor" || lesId === "prototype") continue;
+          if (typeof lesId === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(lesId)) {
+            const sc = v[lesId];
+            if (typeof sc === "number" && Number.isInteger(sc) && sc >= 0 && sc <= 100) {
+              scores[lesId] = sc;
+            }
+          }
+        }
+        sanitized[k] = scores;
+      }
+    } else if (k === "bestEar" || k === "bestPairs" || k === "bestWords" || k === "bestBuild") {
+      if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 100) sanitized[k] = v;
+    } else if (k === "speakIdx") {
+      if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 1000) sanitized[k] = v;
+    } else if (k === "wgScope" || k === "bdScope") {
+      if (typeof v === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(v)) sanitized[k] = v;
+    }
+  }
+
+  return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
+if (typeof module !== "undefined") {
+  module.exports = { autoCorrelate, normalizeContour, classifyTone, escapeHtml, validateBackupData };
+}
 if (typeof document === "undefined") { /* Node test mode */ } else { initApp(); }
 
 /* ---------------- App ---------------- */
@@ -89,15 +152,18 @@ const store = {
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.startsWith("pp_")) {
-        try { data[k.slice(3)] = JSON.parse(localStorage.getItem(k)); } catch {}
+        const subKey = k.slice(3);
+        if (subKey === "__proto__" || subKey === "constructor" || subKey === "prototype") continue;
+        try { data[subKey] = JSON.parse(localStorage.getItem(k)); } catch {}
       }
     }
     return data;
   },
   restore(data) {
-    if (!data || typeof data !== "object") return false;
-    Object.keys(data).forEach(k => {
-      try { localStorage.setItem("pp_" + k, JSON.stringify(data[k])); } catch {}
+    const valid = validateBackupData(data);
+    if (!valid) return false;
+    Object.keys(valid).forEach(k => {
+      try { localStorage.setItem("pp_" + k, JSON.stringify(valid[k])); } catch {}
     });
     return true;
   },
@@ -205,6 +271,11 @@ if (importBtn && importFile) {
   importFile.addEventListener("change", e => {
     const f = e.target.files && e.target.files[0];
     if (!f) return;
+    if (f.size > 1024 * 1024) {
+      alert("File is too large (maximum backup size is 1MB).");
+      importFile.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       try {
@@ -213,9 +284,17 @@ if (importBtn && importFile) {
           alert("Progress restored successfully!");
           location.reload();
         } else {
-          alert("Invalid backup file.");
+          alert("Invalid backup file: contents did not match expected structure.");
         }
-      } catch { alert("Failed to read backup file."); }
+      } catch {
+        alert("Failed to read backup file. Please ensure it is valid JSON.");
+      } finally {
+        importFile.value = "";
+      }
+    };
+    reader.onerror = () => {
+      alert("Error reading backup file.");
+      importFile.value = "";
     };
     reader.readAsText(f);
   });
@@ -270,6 +349,7 @@ function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
 const screens = ["home", "lessons", "lesson", "lessonquiz", "words", "wordgame", "build", "learn", "ear", "speak", "pairs", "settings"];
 const NAV_FOR = { lesson: "lessons", lessonquiz: "lessons", build: "wordgame" };
 function go(name, arg) {
+  if (!screens.includes(name)) name = "home";
   if (name !== "speak") SpeakGame.stopMic();
   screens.forEach(s => $("#screen-" + s).classList.toggle("active", s === name));
   const navName = NAV_FOR[name] || name;
@@ -295,12 +375,21 @@ document.body.addEventListener("click", e => {
 
 /* ---- lesson progress ---- */
 const Progress = {
-  scores() { return store.get("lessonScores", {}); },
-  score(id) { return this.scores()[id]; },
+  scores() {
+    const raw = store.get("lessonScores", {});
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+    return raw;
+  },
+  score(id) {
+    const s = this.scores()[id];
+    return (typeof s === "number" && Number.isFinite(s)) ? Math.floor(s) : undefined;
+  },
   isDone(id) { const s = this.score(id); return s !== undefined && s >= LessonQuiz.passMark; },
   record(id, score) {
+    if (typeof id !== "string" || !/^[a-zA-Z0-9_-]{1,64}$/.test(id)) return;
+    const safeScore = (typeof score === "number" && Number.isFinite(score)) ? Math.max(0, Math.min(100, Math.floor(score))) : 0;
     const all = this.scores();
-    all[id] = Math.max(all[id] || 0, score);
+    all[id] = Math.max(all[id] || 0, safeScore);
     store.set("lessonScores", all);
   },
   nextLesson() { return LESSONS.find(l => !this.isDone(l.id)) || null; },
@@ -324,10 +413,10 @@ function renderHome() {
   if (next) {
     const idx = LESSONS.indexOf(next) + 1;
     box.innerHTML = `
-      <div class="card continue" data-go="lesson" data-arg="${next.id}">
+      <div class="card continue" data-go="lesson" data-arg="${escapeHtml(next.id)}">
         <div class="emoji" style="font-size:2rem">${next.emoji}</div>
         <div><span class="tag" style="background:#fdf3e3;color:#b07d1e">${done ? "Continue" : "Start here"}</span>
-          <h2>Lesson ${idx}: ${next.title}</h2><div class="best">${next.phrases.length} phrases · about 5 minutes</div></div>
+          <h2>Lesson ${idx}: ${escapeHtml(next.title)}</h2><div class="best">${next.phrases.length} phrases · about 5 minutes</div></div>
         <div class="go">Go ›</div>
       </div>`;
   } else {
@@ -347,10 +436,11 @@ function renderLessons() {
     <div class="card" style="padding:6px 12px;margin-top:14px">
       ${LESSONS.map((l, i) => {
         const done = Progress.isDone(l.id), sc = Progress.score(l.id);
-        return `<div class="lessonrow${l === next ? " next" : ""}" data-go="lesson" data-arg="${l.id}">
+        const scDisplay = sc !== undefined ? ` · Try it: ${escapeHtml(sc)}/${LessonQuiz.total}` : "";
+        return `<div class="lessonrow${l === next ? " next" : ""}" data-go="lesson" data-arg="${escapeHtml(l.id)}">
           <div class="num">${l.emoji}</div>
-          <div><div class="ttl">${i + 1}. ${l.title}</div>
-            <div class="meta">${l.phrases.length} phrases${sc !== undefined ? ` · Try it: ${sc}/${LessonQuiz.total}` : ""}${l === next ? " · <b style='color:#b07d1e'>up next</b>" : ""}</div></div>
+          <div><div class="ttl">${i + 1}. ${escapeHtml(l.title)}</div>
+            <div class="meta">${l.phrases.length} phrases${scDisplay}${l === next ? " · <b style='color:#b07d1e'>up next</b>" : ""}</div></div>
           <div class="done">${done ? "✓" : "›"}</div>
         </div>`; }).join("")}
     </div>`;
@@ -830,8 +920,13 @@ const SpeakGame = {
     if (this.animId) { cancelAnimationFrame(this.animId); this.animId = null; }
     this.recording = false;
     if (this.stream) {
-      this.stream.getTracks().forEach(track => track.stop());
+      this.stream.getTracks().forEach(track => {
+        try { track.stop(); } catch {}
+      });
       this.stream = null;
+    }
+    if (this.audioCtx && this.audioCtx.state === "running") {
+      try { this.audioCtx.suspend(); } catch {}
     }
     const mic = $("#spMic");
     if (mic) { mic.classList.remove("recording"); mic.textContent = "🎙"; }
@@ -933,6 +1028,14 @@ renderHome();
 // iOS: voices often load only after first interaction
 const initVoices = () => { if (!TTSm.voices.length) TTSm.load(); };
 ["touchstart", "pointerdown", "click"].forEach(evt => document.body.addEventListener(evt, initVoices, { once: true }));
+
+// Privacy & hardware: release microphone when page is hidden or user navigates away
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) SpeakGame.stopMic();
+});
+window.addEventListener("pagehide", () => {
+  SpeakGame.stopMic();
+});
 
 // Service worker: registers, and reloads once when a new version has been installed.
 if ("serviceWorker" in navigator && location.protocol === "https:") {
