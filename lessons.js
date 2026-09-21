@@ -342,6 +342,69 @@ const LESSONS = [
       { title: "zhè / nà / nǎ", body: "Three sounds, one pattern: zhè = this, nà = that, nǎ = which. Add ge for “this one / that one / which one”; add lǐ for “here / there / where”." },
       { title: "Plurals with men", body: "wǒ (I) → wǒmen (we). nǐ (you) → nǐmen (you all). tā (he/she) → tāmen (they). Only for people — things don't get a plural at all." },
     ] },
+
+  // ------------------------------------------------------------------ 15
+  { id: "weather", title: "Weather & comfort", emoji: "☀️",
+    intro: "Everyday small talk starts with the weather. These phrases let you comment on the temperature and show you care — in Chinese families, asking if someone is warm or reminding them to bundle up is a daily expression of affection.",
+    phrases: [
+      { hz: "今天天气怎么样", py: "jīntiān tiānqì zěnmeyàng?", en: "how's the weather today?", parts: [["jīntiān","today"],["tiānqì","weather"],["zěnmeyàng","how is it"]], tip: "The classic conversation starter with anyone, anytime." },
+      { hz: "天气很好", py: "tiānqì hěn hǎo", en: "the weather is great", parts: [["tiānqì","weather"],["hěn","very"],["hǎo","good"]] },
+      { hz: "今天很热", py: "jīntiān hěn rè", en: "it's hot today", parts: [["jīntiān","today"],["hěn","very"],["rè","hot"]] },
+      { hz: "有点儿冷", py: "yǒudiǎnr lěng", en: "it's a bit cold", parts: [["yǒudiǎnr","a bit"],["lěng","cold"]] },
+      { hz: "外面下雨了", py: "wàimiàn xiàyǔ le", en: "it's raining outside", parts: [["wàimiàn","outside"],["xiàyǔ","rain"],["le","(now)"]] },
+      { hz: "带伞", py: "dài sǎn", en: "bring an umbrella", parts: [["dài","bring"],["sǎn","umbrella"]] },
+      { hz: "多穿一点", py: "duō chuān yìdiǎn", en: "wear a bit more (bundle up)", parts: [["duō","more"],["chuān","wear"],["yìdiǎn","a little"]], tip: "What every parent and grandparent says when you step outside." },
+      { hz: "你冷吗", py: "nǐ lěng ma?", en: "are you cold?", parts: [["nǐ","you"],["lěng","cold"],["ma","?"]] },
+      { hz: "很舒服", py: "hěn shūfu", en: "very comfortable", parts: [["hěn","very"],["shūfu","comfortable"]] },
+      { hz: "风很大", py: "fēng hěn dà", en: "it's very windy", parts: [["fēng","wind"],["hěn","very"],["dà","big/strong"]], tip: "Literally “wind very big”." },
+      { hz: "太阳", py: "tàiyáng", en: "sun / sunshine" },
+    ],
+    notes: [
+      { title: "The caring word duō", body: "Put duō (more) before a verb to offer thoughtful advice: duō chuān (wear more), duō hē shuǐ (drink more warm water), duō chī (eat more). It's warm, natural, and used constantly in family settings." },
+      { title: "tiānqì vs. tiān", body: "tiān means day or sky. tiānqì literally means “sky energy” — the weather! When someone asks jīntiān tiānqì zěnmeyàng, just answer with hěn rè (very hot), hěn lěng (very cold), or hěn hǎo (very nice)." },
+    ] },
+
+  // ------------------------------------------------------------------ 16
+  { id: "routine", title: "Daily routine & home life", emoji: "🏠",
+    intro: "Talk about what you're doing right now and navigate life at home. Chinese makes continuous action (“-ing”) effortless: just put zài in front of any verb.",
+    phrases: [
+      { hz: "你在干什么", py: "nǐ zài gàn shénme?", en: "what are you doing?", parts: [["nǐ","you"],["zài","(in middle of)"],["gàn shénme","doing what"]], tip: "The most natural everyday way to ask someone what they're up to." },
+      { hz: "我在工作", py: "wǒ zài gōngzuò", en: "I'm working", parts: [["wǒ","I"],["zài","(in middle of)"],["gōngzuò","working"]] },
+      { hz: "我在休息", py: "wǒ zài xiūxi", en: "I'm taking a break / resting", parts: [["wǒ","I"],["zài","(in middle of)"],["xiūxi","resting"]] },
+      { hz: "起床", py: "qǐchuáng", en: "wake up / get out of bed", parts: [["qǐ","rise"],["chuáng","bed"]] },
+      { hz: "去睡觉", py: "qù shuìjiào", en: "go to sleep", parts: [["qù","go"],["shuìjiào","sleep"]] },
+      { hz: "洗澡", py: "xǐzǎo", en: "take a shower / bath" },
+      { hz: "回家", py: "huí jiā", en: "return home", parts: [["huí","return"],["jiā","home"]] },
+      { hz: "出门", py: "chūmén", en: "head out / leave the house", parts: [["chū","exit"],["mén","door"]] },
+      { hz: "我在看电视", py: "wǒ zài kàn diànshì", en: "I'm watching TV", parts: [["wǒ","I"],["zài","(in middle of)"],["kàn","watch"],["diànshì","TV"]] },
+      { hz: "洗手", py: "xǐ shǒu", en: "wash hands", parts: [["xǐ","wash"],["shǒu","hands"]], tip: "Especially common right after coming home or before eating." },
+      { hz: "好好休息", py: "hǎohao xiūxi", en: "get some good rest", parts: [["hǎohao","well/properly"],["xiūxi","rest"]], tip: "A kind parting phrase when someone is turning in or feeling tired." },
+    ],
+    notes: [
+      { title: "Instant “-ing” with zài", body: "Put zài right before any verb to indicate you are doing it right now: wǒ zài chī fàn (I am eating), wǒ zài xiūxi (I am resting), tā zài kàn diànshì (he is watching TV). No irregular forms or suffixes like “-ing”." },
+      { title: "Repeating words: hǎohao", body: "Repeating a word softens it and makes it friendlier: hǎohao xiūxi (rest well), mànman chī (take your time eating). It turns a statement into warm encouragement." },
+    ] },
+
+  // ------------------------------------------------------------------ 17
+  { id: "health", title: "Health, well-being & care", emoji: "💊",
+    intro: "Caring for family members when they're under the weather. Learn how to say where it hurts, suggest remedies, and offer comfort with the gentle empathy Chinese is famous for.",
+    phrases: [
+      { hz: "你不舒服吗", py: "nǐ bù shūfu ma?", en: "are you feeling unwell?", parts: [["nǐ","you"],["bù","not"],["shūfu","comfortable"],["ma","?"]], tip: "The standard caring check-in when someone looks unwell or quiet." },
+      { hz: "我头疼", py: "wǒ tóu téng", en: "I have a headache", parts: [["wǒ","I"],["tóu","head"],["téng","hurts"]] },
+      { hz: "我肚子疼", py: "wǒ dùzi téng", en: "my stomach hurts", parts: [["wǒ","I"],["dùzi","belly"],["téng","hurts"]] },
+      { hz: "我感冒了", py: "wǒ gǎnmào le", en: "I caught a cold", parts: [["wǒ","I"],["gǎnmào","catch cold"],["le","(now)"]] },
+      { hz: "多喝热水", py: "duō hē rè shuǐ", en: "drink more warm water", parts: [["duō","more"],["hē","drink"],["rè shuǐ","hot water"]], tip: "The quintessential Chinese cure for almost everything! Said with genuine affection." },
+      { hz: "吃药了吗", py: "chī yào le ma?", en: "have you taken medicine?", parts: [["chī","eat/take"],["yào","medicine"],["le","(done)"],["ma","?"]], tip: "Mandarin uses “eat medicine” (chī yào), never “take medicine”." },
+      { hz: "去看医生", py: "qù kàn yīshēng", en: "go see a doctor", parts: [["qù","go"],["kàn","see"],["yīshēng","doctor"]] },
+      { hz: "注意身体", py: "zhùyì shēntǐ", en: "take care of your health", parts: [["zhùyì","pay attention to"],["shēntǐ","health/body"]], tip: "A warm, respectful sign-off often said to parents, elders, or when parting." },
+      { hz: "好多了", py: "hǎo duō le", en: "feeling much better", parts: [["hǎo","good"],["duō","much"],["le","(now)"]] },
+      { hz: "别熬夜", py: "bié áoyè", en: "don't stay up late", parts: [["bié","don't"],["áoyè","stay up late"]], tip: "Heard in every household when it gets past 11 PM." },
+      { hz: "生病", py: "shēngbìng", en: "to fall ill / be sick" },
+    ],
+    notes: [
+      { title: "Where does it hurt? [Body part] + téng", body: "Describing pain is simple: just name the part and add téng (hurts): tóu téng = head hurts (headache), dùzi téng = belly hurts (stomachache). No extra prepositions needed." },
+      { title: "Friendly “don't” with bié", body: "While bú yào is direct and firm (“don't want / do not”), bié is a softer, kinder “don't”: bié dānxīn (don't worry), bié áoyè (don't stay up late). Perfect for showing warmth without being bossy." },
+    ] },
 ];
 
 // Bonus phrasebook category (not a lesson): little words that glue sentences together.

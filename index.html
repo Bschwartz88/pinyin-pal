@@ -188,7 +188,7 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
       <div class="card gamecard" data-go="lessons">
         <div class="emoji" style="background:#fdf3e3">🎓</div>
         <div><span class="tag" style="background:#fdf3e3;color:#b07d1e">Lessons</span>
-          <h2>Lessons</h2><div class="best" id="lessonCount">14 short lessons</div></div>
+          <h2>Lessons</h2><div class="best" id="lessonCount">17 short lessons</div></div>
       </div>
       <div class="card gamecard" data-go="words">
         <div class="emoji" style="background:#eaf1f8">📖</div>
@@ -270,10 +270,15 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
         <input type="range" id="rateSlider" min="0.5" max="1.1" step="0.1" value="0.9"></div>
       <div class="setrow"><div><b>Test voice</b><div class="sub">nǐ hǎo — hello</div></div>
         <button class="btn secondary" id="testVoice">▶︎ Play</button></div>
+      <div class="setrow"><div><b>Export progress</b><div class="sub">Save backup or transfer to iPhone/iPad</div></div>
+        <button class="btn secondary" id="exportBtn">Export</button></div>
+      <div class="setrow"><div><b>Import progress</b><div class="sub">Restore backup file</div></div>
+        <button class="btn secondary" id="importBtn">Import</button>
+        <input type="file" id="importFile" accept=".json" style="display:none"></div>
       <div class="setrow"><div><b>Reset progress</b><div class="sub">Clears lessons, scores &amp; streak</div></div>
         <button class="btn secondary" id="resetBtn">Reset</button></div>
     </div>
-    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.3</span> · All progress stays on this device.</p>
+    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.4</span> · All progress stays on this device.</p>
   </section>
 
   <nav class="nav">
