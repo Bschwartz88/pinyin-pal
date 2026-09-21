@@ -84,13 +84,40 @@ function initApp() {
 const store = {
   get(k, d) { try { const v = localStorage.getItem("pp_" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
   set(k, v) { try { localStorage.setItem("pp_" + k, JSON.stringify(v)); } catch {} },
+  all() {
+    const data = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith("pp_")) {
+        try { data[k.slice(3)] = JSON.parse(localStorage.getItem(k)); } catch {}
+      }
+    }
+    return data;
+  },
+  restore(data) {
+    if (!data || typeof data !== "object") return false;
+    Object.keys(data).forEach(k => {
+      try { localStorage.setItem("pp_" + k, JSON.stringify(data[k])); } catch {}
+    });
+    return true;
+  },
 };
+
+function getLocalDateStr(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function bumpStreak() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getLocalDateStr();
   const last = store.get("lastDay", null);
   let days = store.get("streak", 0);
   if (last === today) return days;
-  const yest = new Date(Date.now() - 864e5).toISOString().slice(0, 10);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yest = getLocalDateStr(yesterday);
   days = (last === yest) ? days + 1 : 1;
   store.set("streak", days); store.set("lastDay", today);
   return days;
@@ -99,7 +126,7 @@ function showStreak() { document.getElementById("streakDays").textContent = stor
 
 /* ---- TTS ---- */
 const TTSm = {
-  voices: [], voice: null,
+  voices: [], voice: null, currentUtterance: null,
   rate: store.get("rate", 0.9),
   load() {
     const all = speechSynthesis.getVoices();
@@ -117,10 +144,17 @@ const TTSm = {
     try {
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(hanzi);
+      this.currentUtterance = u;
       if (this.voice) u.voice = this.voice;
       u.lang = this.voice ? this.voice.lang : "zh-CN";
       u.rate = rate ?? this.rate;
-      if (onend) u.onend = onend;
+      u.onend = () => {
+        this.currentUtterance = null;
+        if (onend) onend();
+      };
+      u.onerror = () => {
+        this.currentUtterance = null;
+      };
       speechSynthesis.speak(u);
     } catch (e) { console.log("TTS error", e); }
   },
@@ -150,6 +184,43 @@ rateSlider.addEventListener("input", e => {
   document.getElementById("rateLabel").textContent = TTSm.rate <= 0.7 ? "Slow" : TTSm.rate <= 0.95 ? "Normal" : "Fast";
 });
 document.getElementById("testVoice").addEventListener("click", () => TTSm.speak("你好"));
+
+const exportBtn = document.getElementById("exportBtn");
+if (exportBtn) {
+  exportBtn.addEventListener("click", () => {
+    const data = store.all();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `pinyin-pal-backup-${getLocalDateStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+}
+const importBtn = document.getElementById("importBtn");
+const importFile = document.getElementById("importFile");
+if (importBtn && importFile) {
+  importBtn.addEventListener("click", () => importFile.click());
+  importFile.addEventListener("change", e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (store.restore(data)) {
+          alert("Progress restored successfully!");
+          location.reload();
+        } else {
+          alert("Invalid backup file.");
+        }
+      } catch { alert("Failed to read backup file."); }
+    };
+    reader.readAsText(f);
+  });
+}
+
 document.getElementById("resetBtn").addEventListener("click", () => {
   Object.keys(localStorage).filter(k => k.startsWith("pp_")).forEach(k => localStorage.removeItem(k));
   location.reload();
@@ -159,6 +230,9 @@ document.getElementById("resetBtn").addEventListener("click", () => {
 const $ = s => document.querySelector(s);
 const rnd = a => a[Math.floor(Math.random() * a.length)];
 const shuffle = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
+
+// Mean heights of the 4 tones in the 0..1 scale (where 1 is high pitch):
+const TONE_CENTERS = { 1: 0.82, 2: 0.60, 3: 0.35, 4: 0.57 };
 
 // Draw an ideal tone curve on a canvas.
 function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
@@ -179,13 +253,13 @@ function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
   }
   ctx.stroke();
   if (user && user.length > 2) {
-    const min = Math.min(...user), max = Math.max(...user);
-    const span = Math.max(4, max - min);           // semitone span, at least 4 for visual sanity
+    const center = TONE_CENTERS[tone] || 0.55;
     ctx.strokeStyle = "#2b2523"; ctx.lineWidth = 2.5; ctx.setLineDash([5, 4]);
     ctx.beginPath();
     user.forEach((s, i) => {
       const t = i / (user.length - 1);
-      const y = h * (1 - (0.15 + 0.7 * ((s - min) / span)));
+      const normY = Math.max(0.08, Math.min(0.92, center + s * 0.065));
+      const y = h * (1 - normY);
       i ? ctx.lineTo(8 + t * (w - 16), y) : ctx.moveTo(8, y);
     });
     ctx.stroke(); ctx.setLineDash([]);
@@ -196,6 +270,7 @@ function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
 const screens = ["home", "lessons", "lesson", "lessonquiz", "words", "wordgame", "build", "learn", "ear", "speak", "pairs", "settings"];
 const NAV_FOR = { lesson: "lessons", lessonquiz: "lessons", build: "wordgame" };
 function go(name, arg) {
+  if (name !== "speak") SpeakGame.stopMic();
   screens.forEach(s => $("#screen-" + s).classList.toggle("active", s === name));
   const navName = NAV_FOR[name] || name;
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.go === navName));
@@ -746,10 +821,20 @@ const PairsGame = {
 
 /* ---- Speak game: Pitch Painter ---- */
 const SpeakGame = {
-  idx: 0, audioCtx: null, analyser: null, stream: null, recording: false,
+  idx: 0, audioCtx: null, analyser: null, stream: null, recording: false, animId: null,
   enter() {
     this.idx = store.get("speakIdx", 0) % SPEAK_TARGETS.length;
     this.render();
+  },
+  stopMic() {
+    if (this.animId) { cancelAnimationFrame(this.animId); this.animId = null; }
+    this.recording = false;
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+      this.stream = null;
+    }
+    const mic = $("#spMic");
+    if (mic) { mic.classList.remove("recording"); mic.textContent = "🎙"; }
   },
   target() { return SPEAK_TARGETS[this.idx % SPEAK_TARGETS.length]; },
   render() {
@@ -778,8 +863,8 @@ const SpeakGame = {
     drawToneCurve($("#speakCanvas"), t.tone);
     $("#spHear").addEventListener("click", () => TTSm.speak(t.hz, { rate: 0.8 }));
     $("#spSlow").addEventListener("click", () => TTSm.speak(t.hz, { rate: 0.5 }));
-    $("#spNext").addEventListener("click", () => { this.idx++; store.set("speakIdx", this.idx); this.render(); });
-    $("#spPrev").addEventListener("click", () => { this.idx = (this.idx + SPEAK_TARGETS.length - 1) % SPEAK_TARGETS.length; store.set("speakIdx", this.idx); this.render(); });
+    $("#spNext").addEventListener("click", () => { this.stopMic(); this.idx++; store.set("speakIdx", this.idx); this.render(); });
+    $("#spPrev").addEventListener("click", () => { this.stopMic(); this.idx = (this.idx + SPEAK_TARGETS.length - 1) % SPEAK_TARGETS.length; store.set("speakIdx", this.idx); this.render(); });
     $("#spMic").addEventListener("click", () => this.record());
   },
   async ensureMic() {
@@ -809,17 +894,22 @@ const SpeakGame = {
     const t0 = performance.now();
     const DURATION = 1800;
     const loop = () => {
+      if (!this.recording) return;
       this.analyser.getFloatTimeDomainData(buf);
       const { freq } = autoCorrelate(buf, this.audioCtx.sampleRate);
       if (freq > 0) freqs.push(freq);
-      if (performance.now() - t0 < DURATION) requestAnimationFrame(loop);
-      else this.evaluate(freqs);
+      if (performance.now() - t0 < DURATION) {
+        this.animId = requestAnimationFrame(loop);
+      } else {
+        this.animId = null;
+        this.evaluate(freqs);
+      }
     };
-    requestAnimationFrame(loop);
+    this.animId = requestAnimationFrame(loop);
   },
   evaluate(freqs) {
-    this.recording = false;
-    const mic = $("#spMic"); mic.classList.remove("recording"); mic.textContent = "🎙";
+    this.stopMic();
+    if (!$("#screen-speak") || !$("#screen-speak").classList.contains("active")) return;
     const t = this.target();
     const contour = normalizeContour(freqs);
     if (!contour || contour.length < 8) {
@@ -841,7 +931,8 @@ const SpeakGame = {
 /* ---- boot ---- */
 renderHome();
 // iOS: voices often load only after first interaction
-document.body.addEventListener("touchstart", () => { if (!TTSm.voices.length) TTSm.load(); }, { once: true });
+const initVoices = () => { if (!TTSm.voices.length) TTSm.load(); };
+["touchstart", "pointerdown", "click"].forEach(evt => document.body.addEventListener(evt, initVoices, { once: true }));
 
 // Service worker: registers, and reloads once when a new version has been installed.
 if ("serviceWorker" in navigator && location.protocol === "https:") {
