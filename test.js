@@ -3,7 +3,7 @@
 const assert = require("assert");
 const { LESSONS, VOCAB } = require("./lessons.js");
 const { FAMILIES, PAIRS, SPEAK_TARGETS } = require("./data.js");
-const { classifyTone, normalizeContour } = require("./app.js");
+const { classifyTone, normalizeContour, escapeHtml, validateBackupData } = require("./app.js");
 
 let n = 0;
 const ok = (cond, msg) => { assert(cond, msg); n++; };
@@ -48,5 +48,31 @@ ok(classifyTone(contour(t => -3 + 6 * t)).tone === 2, "rising → tone 2");
 ok(classifyTone(contour(t => 4 - 8 * t)).tone === 4, "falling → tone 4");
 ok(classifyTone(contour(t => -4 * Math.sin(Math.PI * t))).tone === 3, "dip → tone 3");
 ok(classifyTone(null).tone === 0, "empty → unknown");
+
+// ---- security helpers ----
+ok(escapeHtml("<script>alert(1)</script>") === "&lt;script&gt;alert(1)&lt;/script&gt;", "escapeHtml handles tags");
+ok(escapeHtml(`"hello" & 'world'`) === "&quot;hello&quot; &amp; &#39;world&#39;", "escapeHtml handles quotes & ampersands");
+ok(escapeHtml(null) === "" && escapeHtml(undefined) === "", "escapeHtml handles null/undefined");
+
+// Backup data validation & anti-XSS
+ok(validateBackupData(null) === null, "validateBackupData rejects null");
+ok(validateBackupData([]) === null, "validateBackupData rejects array");
+ok(validateBackupData("string") === null, "validateBackupData rejects primitive");
+
+// Disallow unknown keys / prototype pollution
+const polluted = JSON.parse('{"__proto__":{"polluted":true},"unauthorizedKey":"bad"}');
+ok(validateBackupData(polluted) === null, "validateBackupData rejects unauthorized keys");
+
+// Disallow XSS in lesson scores
+const xssPayload = { lessonScores: { hello: "<img src=x onerror=alert(1)>", bye: 5 } };
+const sanitizedXss = validateBackupData(xssPayload);
+ok(sanitizedXss !== null, "valid keys parsed");
+ok(sanitizedXss.lessonScores.bye === 5, "valid score retained");
+ok(sanitizedXss.lessonScores.hello === undefined, "XSS string score stripped");
+
+// Disallow invalid formats in lastDay & streak
+ok(validateBackupData({ lastDay: "not-a-date" }) === null, "rejects malformed lastDay");
+ok(validateBackupData({ streak: -10 }) === null, "rejects negative streak");
+ok(validateBackupData({ streak: 5, lastDay: "2026-09-21" }).streak === 5, "accepts valid streak");
 
 console.log(`✓ ${n} checks passed · ${LESSONS.length} lessons · ${total} lesson phrases · ${VOCAB.reduce((a, c) => a + c.words.length, 0)} phrasebook entries`);
