@@ -1,7 +1,7 @@
 // Pinyin Pal service worker
 // Strategy: network-first for the app's own files (so updates show up on the next open),
 // falling back to the cache when offline. Icons are cache-first.
-const VERSION = "pp-v0.4.1";
+const VERSION = "pp-v0.4.2";
 const ASSETS = ["./", "index.html", "app.js", "data.js", "lessons.js", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", e => {
