@@ -94,7 +94,7 @@ function validateBackupData(data) {
   const allowedKeys = new Set([
     "streak", "lastDay", "rate", "voiceURI", "lessonScores",
     "bestEar", "bestPairs", "bestWords", "bestBuild", "speakIdx",
-    "wgScope", "bdScope"
+    "wgScope", "bdScope", "soundOpen"
   ]);
 
   for (const k of Object.keys(data)) {
@@ -129,6 +129,8 @@ function validateBackupData(data) {
       if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 1000) sanitized[k] = v;
     } else if (k === "wgScope" || k === "bdScope") {
       if (typeof v === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(v)) sanitized[k] = v;
+    } else if (k === "soundOpen") {
+      if (typeof v === "boolean") sanitized[k] = v;
     }
   }
 
@@ -614,18 +616,29 @@ function renderPicker(scr, { title, emoji, blurb, other, otherLabel, storeKey, o
   const learnedN = Progress.learnedPhrases().length;
   let scope = store.get(storeKey, learnedN >= 8 ? "learned" : "all");
   const draw = () => {
+    // Name of the current selection, so Start always says what it will play.
+    const picked = LESSONS.find(l => l.id === scope);
+    const scopeName = scope === "learned" ? "lessons I've finished" : scope === "all" ? "everything" : (picked ? picked.title : "everything");
+    // Only a single lesson is chosen from the long list, so keep that list folded
+    // away by default — otherwise it pushes Start off the bottom of a phone screen.
+    const oneLessonChosen = !!picked;
     scr.innerHTML = `
-      <h2 style="margin-top:8px">${emoji} ${title}</h2>
-      <p class="sub">${blurb}</p>
-      <p class="sub" style="margin-top:14px"><b>Which words?</b></p>
+      <h2 style="margin-top:8px">${emoji} ${escapeHtml(title)}</h2>
+      <p class="sub">${escapeHtml(blurb)}</p>
+      <button class="btn big" id="pkStart" style="margin-top:16px">▶︎ Start — ${escapeHtml(scopeName)}</button>
+      <p class="sub" style="margin-top:18px"><b>Which words?</b></p>
       <div class="catbar" style="flex-wrap:wrap">
         <span class="catchip${scope === "learned" ? " on" : ""}" data-s="learned">✓ Lessons I've finished${learnedN ? ` (${learnedN})` : ""}</span>
         <span class="catchip${scope === "all" ? " on" : ""}" data-s="all">📚 Everything</span>
-        ${LESSONS.map(l => `<span class="catchip${scope === l.id ? " on" : ""}" data-s="${l.id}">${l.emoji} ${l.title}</span>`).join("")}
       </div>
       ${scope === "learned" && learnedN < 8 ? `<p class="sub">Finish a couple of lessons first and this option will use just those words. For now it uses everything.</p>` : ""}
-      <button class="btn big" id="pkStart" style="margin-top:12px">▶︎ Start</button>
-      <p style="margin-top:14px;text-align:center"><button class="backlink" data-go="${other}">${otherLabel} ›</button></p>`;
+      <details class="fold" id="pkLessons" style="margin-top:14px"${oneLessonChosen ? " open" : ""}>
+        <summary>📚 Or pick one lesson${oneLessonChosen ? ` — ${escapeHtml(picked.title)}` : ""}</summary>
+        <div class="catbar" style="flex-wrap:wrap">
+          ${LESSONS.map(l => `<span class="catchip${scope === l.id ? " on" : ""}" data-s="${escapeHtml(l.id)}">${l.emoji} ${escapeHtml(l.title)}</span>`).join("")}
+        </div>
+      </details>
+      <p style="margin-top:18px;text-align:center"><button class="backlink" data-go="${escapeHtml(other)}">${escapeHtml(otherLabel)} ›</button></p>`;
     scr.querySelectorAll(".catchip").forEach(c => c.addEventListener("click", () => { scope = c.dataset.s; store.set(storeKey, scope); draw(); }));
     $("#pkStart").addEventListener("click", () => onStart(scope));
   };
@@ -1028,6 +1041,13 @@ renderHome();
 // iOS: voices often load only after first interaction
 const initVoices = () => { if (!TTSm.voices.length) TTSm.load(); };
 ["touchstart", "pointerdown", "click"].forEach(evt => document.body.addEventListener(evt, initVoices, { once: true }));
+
+// Remember whether the "Sound practice" section is open, so it stays how it was left.
+const soundFold = document.getElementById("soundFold");
+if (soundFold) {
+  soundFold.open = store.get("soundOpen", false) === true;
+  soundFold.addEventListener("toggle", () => store.set("soundOpen", soundFold.open));
+}
 
 // Privacy & hardware: release microphone when page is hidden or user navigates away
 document.addEventListener("visibilitychange", () => {
