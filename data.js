@@ -117,7 +117,7 @@ const PRAISE = [
   "Duì le! (Correct!) 🙌", "Your ears are getting sharp! 👂", "Bàng! (Awesome!) 💪",
 ];
 const ENCOURAGE = [
-  "Close one — listen again 👂", "Tricky! Even locals' kids mix these up.",
+  "Close one — listen again 👂", "Keep going — replay it and try the next one.",
   "Almost — replay it and watch the curve.", "Good try — tones take a few days to click.",
 ];
 

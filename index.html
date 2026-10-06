@@ -219,6 +219,14 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
         <div><span class="tag" style="background:#f3eafa;color:#7d4ba0">Vocabulary game</span>
           <h2>Word Match</h2><div class="best" id="bestWords">Hear it, know it</div></div>
       </div>
+      <div class="card gamecard" data-go="review">
+        <div class="emoji" style="background:#e2f2ea">🌱</div>
+        <div><span class="tag">Short listening review</span><h2>Listening Garden</h2><div class="best" id="reviewCount">A little listening, often</div></div>
+      </div>
+      <div class="card gamecard" data-go="mission">
+        <div class="emoji" style="background:#fdf3e3">☕</div>
+        <div><span class="tag">Everyday listening</span><h2>Café Mission</h2><div class="best">Five steps from hello to coffee</div></div>
+      </div>
       <div class="card gamecard" data-go="build">
         <div class="emoji" style="background:#e2f2ea">🧱</div>
         <div><span class="tag" style="background:#e2f2ea;color:var(--jade)">Sentence game</span>
@@ -263,6 +271,8 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
   <section class="screen" id="screen-words"></section>
   <!-- GAMES -->
   <section class="screen" id="screen-wordgame"></section>
+  <section class="screen" id="screen-review"></section>
+  <section class="screen" id="screen-mission"></section>
   <section class="screen" id="screen-build"></section>
 
   <!-- SOUND PRACTICE -->
@@ -308,7 +318,7 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
         <div class="btn-row"><button class="btn secondary" id="cancelReset">Keep progress</button><button class="btn" id="confirmReset">Clear progress</button></div>
       </div>
     </div>
-    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.6.2</span> · All progress stays on this device.</p>
+    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.7.2</span> · All progress stays on this device.</p>
   </section>
 
   <nav class="nav">

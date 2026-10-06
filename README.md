@@ -2,10 +2,12 @@
 
 Personal Mandarin learning app for iPad/iPhone — pinyin only, no characters. Runs as a website (bookmark it, or add to the home screen).
 
-## What's inside (v0.6)
+## What's inside (v0.7)
 
-- **Lessons** — 17 short lessons on everyday basics (hello, thanks, how are you, names, yes/no, numbers, food, at the table, ordering, "I don't understand", time, family, wants & likes, this/that/where, weather & comfort, daily routine, health & care). Each one explains the phrases word by word, adds a few "how Chinese works" notes, and ends with a 6-question **Try it** check. Progress and a "continue" card are saved on the device.
-- **Phrasebook** — every phrase (≈260), tap to hear, 🐢 for slow.
+- **Lessons** — 19 short lessons on everyday basics, including café orders and asking for repetition or help. Each one explains the phrases word by word, adds a few "how Chinese works" notes, and ends with a 6-question **Try it** check. Progress and a "continue" card are saved on the device.
+- **Phrasebook** — 286 entries, tap to hear, 🐢 for slow.
+- **Café Mission** — five listening questions following an everyday order, with a link to learn the phrases first.
+- **Listening Garden** — up to five due phrases per round; missed phrases return sooner. Existing lesson scores are preserved. See [content notes](CONTENT.md) for scheduling and editorial limitations.
 - **Word Match** — listening-first practice with slow replay and a Next button so feedback stays available. Settings also offers mixed listening/pinyin practice. New learners start with a familiar lesson; finished-lesson practice unlocks after a lesson is completed.
 - **Build the Sentence** — put word tiles in the right order (one decoy tile).
 - **Sound practice** (optional, folded away on Home) — Meet the Tones, Tone Detective, Pitch Painter (mic + pitch curve), Sound Match.

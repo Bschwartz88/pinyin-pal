@@ -1,5 +1,14 @@
 # Changes
 
+## 0.7.2 — Everyday listening
+
+- Added 24 phrase entries across café and conversation-repair lessons: 19 lessons, 271 lesson phrases and 286 phrasebook entries total.
+- Café Mission offers five contextual listening questions without a timer.
+- Listening Garden schedules short reviews from listening answers, with earlier returns for missed phrases and no interval inflation from early successful replays.
+- Stable phrase IDs and validated review backups preserve existing lesson scores and old backup compatibility.
+- New games are reachable from Home and the game picker. Existing games remain available.
+- Documented content provenance, pinyin conventions and device-audio limitations in CONTENT.md.
+
 ## 0.6.2 — Listening and reliability
 
 - Listening is the default quiz mode; mixed listening/pinyin remains available in Settings.

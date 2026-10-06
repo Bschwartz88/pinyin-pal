@@ -407,6 +407,48 @@ const LESSONS = [
     ] },
 ];
 
+// Practical listening lessons: original editorial content; see CONTENT.md.
+LESSONS.push(
+  { id: "cafe", title: "At the café", emoji: "☕",
+    intro: "Listen for the small questions that make ordering easier. Learn these phrases first, then try the Café Mission from Home.",
+    phrases: [
+      { hz: "你想喝什么", py: "nǐ xiǎng hē shénme?", en: "what would you like to drink?", parts: [["nǐ","you"],["xiǎng","would like"],["hē","drink"],["shénme","what"]] },
+      { hz: "我要一杯咖啡", py: "wǒ yào yì bēi kāfēi", en: "I'd like a cup of coffee", parts: [["wǒ","I"],["yào","want"],["yì bēi","one cup"],["kāfēi","coffee"]] },
+      { hz: "热的还是冰的", py: "rè de háishi bīng de?", en: "hot or iced?", parts: [["rè de","hot"],["háishi","or"],["bīng de","iced"]] },
+      { hz: "你要大杯还是小杯", py: "nǐ yào dà bēi háishi xiǎo bēi?", en: "would you like a large or a small?", parts: [["nǐ yào","you want"],["dà bēi","large cup"],["háishi","or"],["xiǎo bēi","small cup"]] },
+      { hz: "要加糖吗", py: "yào jiā táng ma?", en: "would you like sugar?", parts: [["yào","want"],["jiā táng","add sugar"],["ma","?"]] },
+      { hz: "不要糖", py: "bú yào táng", en: "no sugar, please", parts: [["bú yào","don't want"],["táng","sugar"]] },
+      { hz: "少放一点冰", py: "shǎo fàng yìdiǎn bīng", en: "a little less ice, please", parts: [["shǎo fàng","put in less"],["yìdiǎn","a little"],["bīng","ice"]] },
+      { hz: "在这里喝还是带走", py: "zài zhèlǐ hē háishi dàizǒu?", en: "for here or to go?", parts: [["zài zhèlǐ hē","drink here"],["háishi","or"],["dàizǒu","take away"]] },
+      { hz: "请稍等", py: "qǐng shāo děng", en: "please wait a moment", parts: [["qǐng","please"],["shāo děng","wait a moment"]] },
+      { hz: "一共二十块", py: "yígòng èrshí kuài", en: "twenty yuan in total", parts: [["yígòng","in total"],["èrshí","twenty"],["kuài","yuan"]] },
+      { hz: "可以刷卡吗", py: "kěyǐ shuākǎ ma?", en: "can I pay by card?", parts: [["kěyǐ","can"],["shuākǎ","pay by card"],["ma","?"]] },
+      { hz: "你的咖啡好了", py: "nǐ de kāfēi hǎo le", en: "your coffee is ready", parts: [["nǐ de","your"],["kāfēi","coffee"],["hǎo le","is ready"]] }
+    ], notes: [{ title: "Listen for háishi", body: "In a choice question, háishi connects the options: rè de háishi bīng de? means hot or iced? Listen to the whole question before choosing." },
+      { title: "Spoken tone changes", body: "Here, yī (one) and bù (not) are written with their changed spoken tones: yì bēi, yígòng, bú yào. Third-tone syllables keep their dictionary marks even when their sound changes in a phrase." }] },
+  { id: "clarify", title: "Keep the conversation going", emoji: "💬",
+    intro: "You don't need to catch every word. These useful phrases help you ask for time, repetition, and help.",
+    phrases: [
+      { hz: "请再说一遍", py: "qǐng zài shuō yí biàn", en: "please say it again", parts: [["qǐng","please"],["zài","again"],["shuō","say"],["yí biàn","once"]] },
+      { hz: "请说慢一点", py: "qǐng shuō màn yìdiǎn", en: "please speak a little slower", parts: [["qǐng","please"],["shuō","speak"],["màn yìdiǎn","a little slower"]] },
+      { hz: "我没听清楚", py: "wǒ méi tīng qīngchu", en: "I didn't hear clearly", parts: [["wǒ","I"],["méi","didn't"],["tīng qīngchu","hear clearly"]] },
+      { hz: "这是什么意思", py: "zhè shì shénme yìsi?", en: "what does this mean?", parts: [["zhè","this"],["shì","is"],["shénme yìsi","what meaning"]] },
+      { hz: "我只会说一点中文", py: "wǒ zhǐ huì shuō yìdiǎn Zhōngwén", en: "I only speak a little Chinese", parts: [["wǒ","I"],["zhǐ","only"],["huì shuō","can speak"],["yìdiǎn Zhōngwén","a little Chinese"]] },
+      { hz: "可以帮我一下吗", py: "kěyǐ bāng wǒ yíxià ma?", en: "could you help me for a moment?", parts: [["kěyǐ","could"],["bāng wǒ","help me"],["yíxià","a moment"],["ma","?"]] },
+      { hz: "请等一下", py: "qǐng děng yíxià", en: "please wait a moment", parts: [["qǐng","please"],["děng","wait"],["yíxià","a moment"]] },
+      { hz: "让我想一下", py: "ràng wǒ xiǎng yíxià", en: "let me think for a moment", parts: [["ràng wǒ","let me"],["xiǎng","think"],["yíxià","a moment"]] },
+      { hz: "我明白了", py: "wǒ míngbai le", en: "I understand now", parts: [["wǒ","I"],["míngbai","understand"],["le","now"]] },
+      { hz: "没关系", py: "méi guānxi", en: "it's okay / never mind", parts: [["méi","no"],["guānxi","matter"]] },
+      { hz: "别着急", py: "bié zháojí", en: "don't worry / take your time", parts: [["bié","don't"],["zháojí","feel anxious"]] },
+      { hz: "谢谢你的帮助", py: "xièxie nǐ de bāngzhù", en: "thank you for your help", parts: [["xièxie","thank"],["nǐ de","your"],["bāngzhù","help"]] }
+    ], notes: [{ title: "Small requests with yíxià", body: "After a verb, yíxià makes a request feel brief: děng yíxià means wait a moment, and xiǎng yíxià means think for a moment." }] }
+);
+
+// Stable across lesson/phrase reordering and changes to English or pinyin.
+for (const lesson of LESSONS) for (const phrase of lesson.phrases) {
+  phrase.id = lesson.id + "-" + Array.from(phrase.hz, c => c.codePointAt(0).toString(16)).join("");
+}
+
 // Bonus phrasebook category (not a lesson): little words that glue sentences together.
 const CONNECTORS = { cat: "Connectors & glue words", icon: "🔗", words: [
   { hz: "和", py: "hé", en: "and" }, { hz: "也", py: "yě", en: "also" }, { hz: "可是", py: "kěshì", en: "but" },

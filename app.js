@@ -94,14 +94,16 @@ function validateBackupData(data) {
   const allowedKeys = new Set([
     "streak", "lastDay", "rate", "voiceURI", "lessonScores",
     "bestEar", "bestPairs", "bestWords", "bestBuild", "speakIdx",
-    "wgScope", "bdScope", "soundOpen", "practiceMode"
+    "wgScope", "bdScope", "soundOpen", "practiceMode", "phraseReview"
   ]);
 
   for (const k of Object.keys(data)) {
     if (!allowedKeys.has(k)) continue;
     const v = data[k];
 
-    if (k === "streak") {
+    if (k === "phraseReview") {
+      if (v && typeof v === "object" && !Array.isArray(v)) sanitized[k] = sanitizeReview(v);
+    } else if (k === "streak") {
       if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 100000) sanitized[k] = v;
     } else if (k === "lastDay") {
       if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) sanitized[k] = v;
@@ -137,6 +139,33 @@ function validateBackupData(data) {
   }
 
   return Object.keys(sanitized).length > 0 ? sanitized : null;
+}
+
+function sanitizeReview(raw) {
+  const out = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [id, value] of Object.entries(raw).slice(0, 2000)) {
+    if (!/^[a-z][a-z0-9]*-[a-f0-9]{4,140}$/.test(id) || !value || typeof value !== "object") continue;
+    const { due, last, level, attempts, misses } = value;
+    if (![due, last, level, attempts, misses].every(Number.isSafeInteger)) continue;
+    if (last < 0 || due < last || due > 8640000000000000 || level < 0 || level > 5 || attempts < 1 || attempts > 1000000 || misses < 0 || misses > attempts) continue;
+    out[id] = { due, last, level, attempts, misses };
+  }
+  return out;
+}
+
+function scheduleReview(previous, correct, now) {
+  const day = 86400000;
+  // Replaying a phrase early cannot advance its interval again.
+  const level = correct ? Math.min(5, (previous?.level || 0) + (!previous || now >= previous.due ? 1 : 0)) : 0;
+  const due = correct && previous && now < previous.due ? previous.due
+    : now + (correct ? [1, 1, 3, 7, 14, 30][level] * day : 10 * 60000);
+  return { due, last: now, level, attempts: Math.min(1000000, (previous?.attempts || 0) + 1), misses: Math.min(1000000, (previous?.misses || 0) + (correct ? 0 : 1)) };
+}
+
+function duePhrases(phrases, records, now) {
+  return phrases.filter(p => records[p.id] && records[p.id].due <= now)
+    .sort((a, b) => records[a.id].level - records[b.id].level || records[a.id].due - records[b.id].due || a.id.localeCompare(b.id));
 }
 
 function createSessionTimers(schedule = setTimeout, cancel = clearTimeout) {
@@ -187,7 +216,7 @@ function restoreBackup(storage, data) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { autoCorrelate, normalizeContour, classifyTone, escapeHtml, validateBackupData, createSessionTimers, speechRate, acquireCurrentMic, restoreBackup };
+  module.exports = { autoCorrelate, normalizeContour, classifyTone, escapeHtml, validateBackupData, createSessionTimers, speechRate, acquireCurrentMic, restoreBackup, sanitizeReview, scheduleReview, duePhrases };
 }
 if (typeof document === "undefined") { /* Node test mode */ } else { initApp(); }
 
@@ -428,8 +457,8 @@ function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
 }
 
 /* ---- router ---- */
-const screens = ["home", "lessons", "lesson", "lessonquiz", "words", "wordgame", "build", "learn", "ear", "speak", "pairs", "settings"];
-const NAV_FOR = { lesson: "lessons", lessonquiz: "lessons", build: "wordgame" };
+const screens = ["home", "lessons", "lesson", "lessonquiz", "words", "wordgame", "build", "review", "mission", "learn", "ear", "speak", "pairs", "settings"];
+const NAV_FOR = { lesson: "lessons", lessonquiz: "lessons", build: "wordgame", review: "wordgame", mission: "wordgame" };
 function go(name, arg) {
   Session.cancel();
   document.getElementById("resetConfirm").hidden = true;
@@ -448,6 +477,8 @@ function go(name, arg) {
   if (name === "words") renderWords(arg);
   if (name === "wordgame") WordGame.pick();
   if (name === "build") BuildGame.pick();
+  if (name === "review") ListeningGame.pick("review");
+  if (name === "mission") ListeningGame.pick("mission");
   if (name === "learn") renderLearn();
   if (name === "ear") EarGame.start();
   if (name === "speak") SpeakGame.enter();
@@ -487,6 +518,8 @@ const Progress = {
 
 function renderHome() {
   showStreak();
+  const due = duePhrases(LESSONS.flatMap(l => l.phrases), sanitizeReview(store.get("phraseReview", {})), Date.now()).length;
+  $("#reviewCount").textContent = due ? `${due} ${due === 1 ? "phrase" : "phrases"} ready to revisit` : "A little listening, often";
   const be = store.get("bestEar", null), bp = store.get("bestPairs", null), bw = store.get("bestWords", null), bb = store.get("bestBuild", null);
   if (be !== null) $("#bestEar").textContent = `Best: ${be}/10`;
   if (bp !== null) $("#bestPairs").textContent = `Best: ${bp}/10`;
@@ -644,13 +677,13 @@ function choiceRound(game, scr, { title, back }) {
   const cur = game.current;
   const options = shuffle([cur, ...distractorsFor(cur, game.pool, 3)]);
   game.options = options; game.answered = false;
-  game.mode = store.get("practiceMode", "listen") === "mixed" && Math.random() < 0.5 ? "read" : "listen";
+  game.mode = !game.forceListen && store.get("practiceMode", "listen") === "mixed" && Math.random() < 0.5 ? "read" : "listen";
   const prompt = game.mode === "listen"
     ? `<p class="sub">Round ${game.round} of ${game.total} — what does it mean?</p>
        <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button><button class="btn secondary" id="qSlow" style="margin-top:10px">🐢 Play slowly</button>`
     : `<p class="sub">Round ${game.round} of ${game.total} — how do you say…</p>
        <div class="bigword" style="margin:12px 0"><div style="font-size:1.6rem;font-weight:800">“${cur.en}”</div></div>`;
-  quizShell(scr, { title, back, round: game.round, total: game.total, score: game.score, body: `${prompt}
+  quizShell(scr, { title, back, round: game.round, total: game.total, score: game.score, body: `${game.context ? `<p class="sub">${escapeHtml(game.context)}</p>` : ""}${prompt}
       <div class="choices" id="qChoices">
         ${options.map((o, i) => game.mode === "listen"
           ? `<button class="choice" data-i="${i}" style="font-size:.98rem">${o.en}</button>`
@@ -667,6 +700,11 @@ function choiceRound(game, scr, { title, back }) {
       if (game.answered) return;
       game.answered = true;
       const ok = options[+el.dataset.i] === cur;
+      if (game.mode === "listen" && cur.id) {
+        const records = sanitizeReview(store.get("phraseReview", {}));
+        records[cur.id] = scheduleReview(records[cur.id], ok, Date.now());
+        store.set("phraseReview", records);
+      }
       el.classList.add(ok ? "correct" : "wrong");
       if (!ok) $(`#qChoices .choice[data-i="${options.indexOf(cur)}"]`).classList.add("correct");
       if (ok) game.score++;
@@ -684,6 +722,44 @@ function pickRounds(pool, n) {
   while (out.length < n && pool.length) out.push(rnd(pool));
   return out;
 }
+
+/* ---- Short, listening-only practice ---- */
+const ListeningGame = {
+  forceListen: true,
+  pick(kind) {
+    this.kind = kind;
+    const scr = $("#screen-" + kind);
+    this.pool = LESSONS.flatMap(l => l.phrases);
+    const records = sanitizeReview(store.get("phraseReview", {}));
+    const due = duePhrases(this.pool, records, Date.now());
+    const planted = this.pool.filter(p => records[p.id]).length;
+    this.queue = kind === "mission"
+      ? ["你想喝什么", "热的还是冰的", "要加糖吗", "在这里喝还是带走", "你的咖啡好了"].map(hz => LESSONS.find(l => l.id === "cafe").phrases.find(p => p.hz === hz))
+      : due.slice(0, 5);
+    this.title = kind === "mission" ? "☕ Café Mission" : "🌱 Listening Garden";
+    scr.innerHTML = `<h2>${this.title}</h2><div class="card" style="margin-top:16px">
+      <p>${kind === "mission" ? "Step into a café. Hear five things a barista might say and pick their meanings. Replay as often as you like." : due.length ? `${due.length} ${due.length === 1 ? "phrase is" : "phrases are"} ready to revisit. This short round starts with phrases that need more practice.` : "Nothing is due right now. Listening answers in lessons and Word Match plant phrases here. Missed phrases return in about 10 minutes; correct ones return after a day, then at longer intervals."}</p>
+      ${this.queue.length ? `<button class="btn big" id="listeningStart" style="margin-top:16px">Start ${this.queue.length} ${this.queue.length === 1 ? "question" : "questions"}</button>` : '<button class="btn" data-go="wordgame">Plant some phrases</button>'}
+      ${kind === "mission" ? '<p><button class="backlink" data-go="lesson" data-arg="cafe">Meet the café phrases first ›</button></p>' : ""}
+      <p class="sub">${kind === "review" ? `${planted} ${planted === 1 ? "phrase" : "phrases"} planted. ` : ""}No timer. Each answer helps you learn.</p></div>`;
+    scr.querySelector("#listeningStart")?.addEventListener("click", () => {
+      this.total = this.queue.length; this.round = 0; this.score = 0; this.next();
+    }, { once: true });
+  },
+  next() {
+    Session.cancel();
+    this.round++;
+    const scr = $("#screen-" + this.kind);
+    if (this.round > this.total) {
+      bumpStreak(); showStreak();
+      scr.innerHTML = `<div class="roundend card"><h2>${this.kind === "mission" ? "☕ Order complete!" : "🌱 A little practice goes a long way"}</h2><div class="bigscore">${this.score}/${this.total}</div><p>Every replay counts as practice. Come back later to keep these phrases familiar.</p><div class="btn-row"><button class="btn" data-go="${this.kind}">Continue</button><button class="btn secondary" data-go="home">Home</button></div></div>`;
+      return;
+    }
+    this.current = this.queue[this.round - 1];
+    this.context = this.kind === "mission" ? ["You reach the counter. The barista asks…", "The barista checks your order…", "One more question before making your drink…", "Before you pay, the barista asks…", "A moment later, the barista calls out…"][this.round - 1] : "Listen, take your time, and choose a meaning.";
+    choiceRound(this, scr, { title: this.title, back: this.kind });
+  }
+};
 
 /* ---- Lesson "Try it" quiz ---- */
 const LessonQuiz = {
@@ -758,7 +834,8 @@ function renderPicker(scr, { title, emoji, blurb, other, otherLabel, storeKey, o
           ${LESSONS.map(l => `<span class="catchip${scope === l.id ? " on" : ""}" data-s="${escapeHtml(l.id)}">${l.emoji} ${escapeHtml(l.title)}</span>`).join("")}
         </div>
       </details>
-      <p style="margin-top:18px;text-align:center"><button class="backlink" data-go="${escapeHtml(other)}">${escapeHtml(otherLabel)} ›</button></p>`;
+      <p style="margin-top:18px;text-align:center"><button class="backlink" data-go="${escapeHtml(other)}">${escapeHtml(otherLabel)} ›</button></p>
+      <div class="btn-row"><button class="btn secondary" data-go="review">🌱 Listening Garden</button><button class="btn secondary" data-go="mission">☕ Café Mission</button></div>`;
     scr.querySelectorAll(".catchip").forEach(c => c.addEventListener("click", () => { scope = c.dataset.s; store.set(storeKey, scope); draw(); }));
     $("#pkStart").addEventListener("click", () => onStart(scope));
   };
