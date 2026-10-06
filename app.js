@@ -94,7 +94,7 @@ function validateBackupData(data) {
   const allowedKeys = new Set([
     "streak", "lastDay", "rate", "voiceURI", "lessonScores",
     "bestEar", "bestPairs", "bestWords", "bestBuild", "speakIdx",
-    "wgScope", "bdScope", "soundOpen"
+    "wgScope", "bdScope", "soundOpen", "practiceMode"
   ]);
 
   for (const k of Object.keys(data)) {
@@ -129,6 +129,8 @@ function validateBackupData(data) {
       if (typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 1000) sanitized[k] = v;
     } else if (k === "wgScope" || k === "bdScope") {
       if (typeof v === "string" && /^[a-zA-Z0-9_-]{1,64}$/.test(v)) sanitized[k] = v;
+    } else if (k === "practiceMode") {
+      if (v === "listen" || v === "mixed") sanitized[k] = v;
     } else if (k === "soundOpen") {
       if (typeof v === "boolean") sanitized[k] = v;
     }
@@ -137,37 +139,85 @@ function validateBackupData(data) {
   return Object.keys(sanitized).length > 0 ? sanitized : null;
 }
 
+function createSessionTimers(schedule = setTimeout, cancel = clearTimeout) {
+  let revision = 0;
+  const timers = new Set();
+  return {
+    get revision() { return revision; },
+    cancel() { revision++; timers.forEach(cancel); timers.clear(); },
+    later(fn, delay) {
+      const current = revision;
+      const id = schedule(() => { timers.delete(id); if (revision === current) fn(); }, delay);
+      timers.add(id);
+      return id;
+    }
+  };
+}
+
+function speechRate(rate, slow = false) {
+  const normal = Number.isFinite(rate) ? Math.max(0.5, Math.min(1.1, rate)) : 0.9;
+  return slow ? Math.max(0.3, normal * 0.65) : normal;
+}
+
+async function acquireCurrentMic(request, isCurrent) {
+  const stream = await request();
+  if (!isCurrent()) { stream.getTracks().forEach(track => track.stop()); return null; }
+  return stream;
+}
+
+function restoreBackup(storage, data) {
+  const valid = validateBackupData(data);
+  if (!valid) return { ok: false, reason: "invalid" };
+  const previous = new Map();
+  try {
+    for (const [key, value] of Object.entries(valid)) {
+      const name = "pp_" + key;
+      previous.set(name, storage.getItem(name));
+      storage.setItem(name, JSON.stringify(value));
+    }
+    return { ok: true };
+  } catch {
+    let rolledBack = true;
+    for (const [key, value] of previous) {
+      try { if (value === null) storage.removeItem(key); else storage.setItem(key, value); }
+      catch { rolledBack = false; }
+    }
+    return { ok: false, reason: "storage", rolledBack };
+  }
+}
+
 if (typeof module !== "undefined") {
-  module.exports = { autoCorrelate, normalizeContour, classifyTone, escapeHtml, validateBackupData };
+  module.exports = { autoCorrelate, normalizeContour, classifyTone, escapeHtml, validateBackupData, createSessionTimers, speechRate, acquireCurrentMic, restoreBackup };
 }
 if (typeof document === "undefined") { /* Node test mode */ } else { initApp(); }
 
 /* ---------------- App ---------------- */
 function initApp() {
+const Session = createSessionTimers();
+function storageWarning() {
+  document.getElementById("storageNotice").textContent = "Progress could not be saved on this device. Free some browser storage and export your progress before closing.";
+}
 
 /* ---- state & storage ---- */
+const sessionProgress = new Map();
 const store = {
-  get(k, d) { try { const v = localStorage.getItem("pp_" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem("pp_" + k, JSON.stringify(v)); } catch {} },
+  get(k, d) { if (sessionProgress.has(k)) return sessionProgress.get(k); try { const v = localStorage.getItem("pp_" + k); return v === null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { sessionProgress.set(k, v); try { localStorage.setItem("pp_" + k, JSON.stringify(v)); return true; } catch { storageWarning(); return false; } },
   all() {
     const data = {};
-    for (let i = 0; i < localStorage.length; i++) {
+    try { for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
       if (k && k.startsWith("pp_")) {
         const subKey = k.slice(3);
         if (subKey === "__proto__" || subKey === "constructor" || subKey === "prototype") continue;
         try { data[subKey] = JSON.parse(localStorage.getItem(k)); } catch {}
       }
-    }
+    } } catch { storageWarning(); }
+    sessionProgress.forEach((v, k) => { data[k] = v; });
     return data;
   },
   restore(data) {
-    const valid = validateBackupData(data);
-    if (!valid) return false;
-    Object.keys(valid).forEach(k => {
-      try { localStorage.setItem("pp_" + k, JSON.stringify(valid[k])); } catch {}
-    });
-    return true;
+    return restoreBackup(localStorage, data);
   },
 };
 
@@ -197,37 +247,51 @@ const TTSm = {
   voices: [], voice: null, currentUtterance: null,
   rate: store.get("rate", 0.9),
   load() {
-    const all = speechSynthesis.getVoices();
-    this.voices = all.filter(v => /^zh([-_]|$)/i.test(v.lang));
+    const all = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+    this.voices = all.filter(window.PinyinOffline.isMandarinVoice);
     const savedURI = store.get("voiceURI", null);
-    this.voice =
-      this.voices.find(v => v.voiceURI === savedURI) ||
-      this.voices.find(v => /tingting|ting-ting/i.test(v.name)) ||
-      this.voices.find(v => /^zh[-_]CN/i.test(v.lang)) ||
-      this.voices[0] || null;
+    this.voice = window.PinyinOffline.chooseMandarinVoice(this.voices, savedURI, !navigator.onLine);
     renderVoiceSelect();
-    document.getElementById("voiceNotice").classList.toggle("show", !this.voice && all.length > 0);
+    document.getElementById("voiceNotice").classList.toggle("show", !this.voice);
+    this.status(this.voice ? (this.voice.localService ? "A device Mandarin voice is selected. Verify sound in airplane mode." : "This voice may need a connection. Choose a device voice for offline use.") : "No usable Mandarin voice found. Download a voice, then reopen the app.");
   },
-  speak(hanzi, { rate = null, onend = null } = {}) {
+  status(message) { document.getElementById("audioStatus").textContent = message; },
+  speak(hanzi, { slow = false, onend = null } = {}) {
     try {
+      this.voice = window.PinyinOffline.chooseMandarinVoice(this.voices, store.get("voiceURI", null), !navigator.onLine);
+      if (!this.voice || !window.speechSynthesis) {
+        this.status("Audio unavailable. Download a Mandarin voice while connected, then reopen the app.");
+        document.getElementById("voiceNotice").classList.add("show");
+        document.getElementById("playbackNotice").textContent = "Audio unavailable. Open Settings to set up a Mandarin voice.";
+        return;
+      }
+      document.getElementById("playbackNotice").textContent = "";
       speechSynthesis.cancel();
       const u = new SpeechSynthesisUtterance(hanzi);
       this.currentUtterance = u;
       if (this.voice) u.voice = this.voice;
       u.lang = this.voice ? this.voice.lang : "zh-CN";
-      u.rate = rate ?? this.rate;
+      u.rate = speechRate(this.rate, slow);
+      const revision = Session.revision;
       u.onend = () => {
+        if (this.currentUtterance !== u || Session.revision !== revision) return;
         this.currentUtterance = null;
         if (onend) onend();
       };
-      u.onerror = () => {
+      u.onerror = event => {
+        if (this.currentUtterance !== u || Session.revision !== revision) return;
         this.currentUtterance = null;
+        if (event.error === "interrupted" || event.error === "canceled") return;
+        this.status("Could not play audio. Check the selected voice and try Play again.");
+        document.getElementById("playbackNotice").textContent = "Could not play audio. Try Play again or check the voice in Settings.";
       };
       speechSynthesis.speak(u);
-    } catch (e) { console.log("TTS error", e); }
+    } catch { document.getElementById("playbackNotice").textContent = "Audio could not start. Check your voice in Settings and try Play again."; }
   },
 };
-speechSynthesis.onvoiceschanged = () => TTSm.load();
+if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => TTSm.load();
+window.addEventListener("online", () => TTSm.load());
+window.addEventListener("offline", () => TTSm.load());
 TTSm.load();
 
 function renderVoiceSelect() {
@@ -236,7 +300,7 @@ function renderVoiceSelect() {
   if (!TTSm.voices.length) { sel.innerHTML = "<option>No Chinese voice found</option>"; return; }
   TTSm.voices.forEach(v => {
     const o = document.createElement("option");
-    o.value = v.voiceURI; o.textContent = `${v.name} (${v.lang})`;
+    o.value = v.voiceURI; o.textContent = `${v.name} (${v.lang})${v.localService ? " · device" : " · online"}`;
     if (TTSm.voice && v.voiceURI === TTSm.voice.voiceURI) o.selected = true;
     sel.appendChild(o);
   });
@@ -244,26 +308,32 @@ function renderVoiceSelect() {
 document.getElementById("voiceSelect").addEventListener("change", e => {
   TTSm.voice = TTSm.voices.find(v => v.voiceURI === e.target.value) || TTSm.voice;
   store.set("voiceURI", e.target.value);
+  TTSm.load();
 });
 const rateSlider = document.getElementById("rateSlider");
 rateSlider.value = TTSm.rate;
+document.getElementById("rateLabel").textContent = speechRate(TTSm.rate) <= 0.7 ? "Slow" : speechRate(TTSm.rate) <= 0.95 ? "Normal" : "Fast";
 rateSlider.addEventListener("input", e => {
   TTSm.rate = parseFloat(e.target.value); store.set("rate", TTSm.rate);
   document.getElementById("rateLabel").textContent = TTSm.rate <= 0.7 ? "Slow" : TTSm.rate <= 0.95 ? "Normal" : "Fast";
 });
 document.getElementById("testVoice").addEventListener("click", () => TTSm.speak("你好"));
+const practiceMode = document.getElementById("practiceMode");
+practiceMode.value = store.get("practiceMode", "listen");
+practiceMode.addEventListener("change", () => store.set("practiceMode", practiceMode.value));
 
 const exportBtn = document.getElementById("exportBtn");
 if (exportBtn) {
   exportBtn.addEventListener("click", () => {
-    const data = store.all();
+    let data;
+    try { data = store.all(); } catch { alert("Cannot read saved progress. Browser storage is unavailable."); return; }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
     a.download = `pinyin-pal-backup-${getLocalDateStr()}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 }
 const importBtn = document.getElementById("importBtn");
@@ -282,11 +352,12 @@ if (importBtn && importFile) {
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-        if (store.restore(data)) {
+        const result = store.restore(data);
+        if (result.ok) {
           alert("Progress restored successfully!");
           location.reload();
         } else {
-          alert("Invalid backup file: contents did not match expected structure.");
+          alert(result.reason === "invalid" ? "Invalid backup file: contents did not match expected structure." : result.rolledBack ? "Could not save the backup. Existing progress was restored. Free storage and try again." : "Storage failed while importing. Some values may have changed. Keep your backup and try again after freeing storage.");
         }
       } catch {
         alert("Failed to read backup file. Please ensure it is valid JSON.");
@@ -303,7 +374,16 @@ if (importBtn && importFile) {
 }
 
 document.getElementById("resetBtn").addEventListener("click", () => {
-  Object.keys(localStorage).filter(k => k.startsWith("pp_")).forEach(k => localStorage.removeItem(k));
+  document.getElementById("resetConfirm").hidden = false;
+  document.getElementById("cancelReset").focus();
+});
+document.getElementById("cancelReset").addEventListener("click", () => {
+  document.getElementById("resetConfirm").hidden = true;
+  document.getElementById("resetBtn").focus();
+});
+document.getElementById("confirmReset").addEventListener("click", () => {
+  try { Object.keys(localStorage).filter(k => k.startsWith("pp_")).forEach(k => localStorage.removeItem(k)); }
+  catch { storageWarning(); return; }
   location.reload();
 });
 
@@ -351,12 +431,16 @@ function drawToneCurve(canvas, tone, { user = null, color = null } = {}) {
 const screens = ["home", "lessons", "lesson", "lessonquiz", "words", "wordgame", "build", "learn", "ear", "speak", "pairs", "settings"];
 const NAV_FOR = { lesson: "lessons", lessonquiz: "lessons", build: "wordgame" };
 function go(name, arg) {
+  Session.cancel();
+  document.getElementById("resetConfirm").hidden = true;
   if (!screens.includes(name)) name = "home";
   if (name !== "speak") SpeakGame.stopMic();
   screens.forEach(s => $("#screen-" + s).classList.toggle("active", s === name));
   const navName = NAV_FOR[name] || name;
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.go === navName));
-  speechSynthesis.cancel();
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  TTSm.currentUtterance = null;
+  document.getElementById("playbackNotice").textContent = "";
   if (name === "home") renderHome();
   if (name === "lessons") renderLessons();
   if (name === "lesson") renderLesson(arg);
@@ -369,6 +453,8 @@ function go(name, arg) {
   if (name === "speak") SpeakGame.enter();
   if (name === "pairs") PairsGame.start();
   window.scrollTo(0, 0);
+  const heading = $("#screen-" + name).querySelector("h1, h2");
+  if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
 }
 document.body.addEventListener("click", e => {
   const t = e.target.closest("[data-go]");
@@ -456,15 +542,15 @@ function phraseRow(w, i) {
     <div class="phrase" data-w="${i}">
       <div style="flex:1"><div class="py">${w.py}</div><div class="en">${w.en}</div>${parts}
         ${w.tip ? `<div class="tip">💡 ${w.tip}</div>` : ""}</div>
-      <div class="spk"><span>🔊</span><span data-slow="1">🐢</span></div>
+      <div class="spk"><button class="phrase-play" aria-label="${escapeHtml('Hear ' + w.en)}">🔊</button><button class="phrase-play" data-slow="1" aria-label="${escapeHtml('Hear ' + w.en + ' slowly')}">🐢</button></div>
     </div>`;
 }
 function wirePhraseRows(scr, words) {
   scr.querySelectorAll(".phrase").forEach(row =>
     row.addEventListener("click", e => {
       const w = words[+row.dataset.w];
-      const slow = e.target.dataset && e.target.dataset.slow !== undefined;
-      TTSm.speak(w.hz, { rate: slow ? 0.5 : 0.8 });
+      const slow = !!e.target.closest("[data-slow]");
+      TTSm.speak(w.hz, { slow });
     }));
 }
 function renderLesson(id) {
@@ -498,13 +584,25 @@ function renderWords(catId) {
   scr.innerHTML = `
     <h2 style="margin-top:8px">📖 Phrasebook</h2>
     <p class="sub">Every phrase from every lesson. Tap to hear it; 🐢 replays slowly.</p>
+    <label for="phraseSearch" style="margin-top:14px">Find a phrase</label>
+    <input id="phraseSearch" type="search" placeholder="English or pinyin" autocomplete="off" style="width:100%;padding:12px;margin-top:6px;border:1px solid var(--line);border-radius:12px">
     <div class="catbar">${VOCAB.map((c, i) =>
       `<span class="catchip${i === wordsCat ? " on" : ""}" data-cat="${i}">${c.icon} ${c.cat}</span>`).join("")}</div>
-    <div class="card" style="padding:4px 14px">${cat.words.map(phraseRow).join("")}</div>
+    <div class="card" id="phraseResults" style="padding:4px 14px">${cat.words.map(phraseRow).join("")}</div>
+    <p id="phraseResultCount" class="sub" role="status"></p>
     ${cat.lessonId ? `<p class="sub" style="margin-top:12px;text-align:center"><button class="backlink" data-go="lesson" data-arg="${cat.lessonId}">Open the lesson for these phrases ›</button></p>` : ""}`;
   scr.querySelectorAll(".catchip").forEach(ch =>
     ch.addEventListener("click", () => { wordsCat = +ch.dataset.cat; renderWords(); }));
   wirePhraseRows(scr, cat.words);
+  const normalize = text => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  $("#phraseSearch").addEventListener("input", event => {
+    const query = normalize(event.target.value.trim());
+    const matches = query ? VOCAB.flatMap(category => category.words).filter(word => normalize(word.en + " " + word.py).includes(query)) : cat.words;
+    const results = $("#phraseResults");
+    results.innerHTML = matches.map(phraseRow).join("");
+    wirePhraseRows(results, matches);
+    $("#phraseResultCount").textContent = query ? `${matches.length} matching phrases across all lessons` : "";
+  });
 }
 
 /* ---- Shared quiz plumbing ---- */
@@ -523,26 +621,46 @@ function quizShell(scr, { title, back, round, total, score, body }) {
     <div class="progressbar"><div style="width:${((round - 1) / total) * 100}%"></div></div>
     <div class="card" style="text-align:center;padding:26px">${body}</div>`;
 }
+function roundControls(scr, game, hanzi) {
+  Session.cancel();
+  scr.querySelectorAll(".choice").forEach(button => { button.disabled = true; button.setAttribute("aria-disabled", "true"); });
+  const controls = document.createElement("div");
+  controls.className = "btn-row round-controls";
+  controls.innerHTML = '<button class="btn secondary" data-replay>🔊 Replay</button><button class="btn secondary" data-slow-replay>🐢 Slow</button><button class="btn" data-next>Next ›</button>';
+  scr.appendChild(controls);
+  controls.querySelector("[data-replay]").addEventListener("click", () => TTSm.speak(hanzi));
+  controls.querySelector("[data-slow-replay]").addEventListener("click", () => TTSm.speak(hanzi, { slow: true }));
+  controls.querySelector("[data-next]").addEventListener("click", () => {
+    Session.cancel();
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    TTSm.currentUtterance = null;
+    game.next();
+    const heading = scr.querySelector("h2, .bigscore");
+    if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+    window.scrollTo(0, 0);
+  }, { once: true });
+}
 function choiceRound(game, scr, { title, back }) {
   const cur = game.current;
   const options = shuffle([cur, ...distractorsFor(cur, game.pool, 3)]);
   game.options = options; game.answered = false;
-  game.mode = Math.random() < 0.5 ? "listen" : "read";
+  game.mode = store.get("practiceMode", "listen") === "mixed" && Math.random() < 0.5 ? "read" : "listen";
   const prompt = game.mode === "listen"
     ? `<p class="sub">Round ${game.round} of ${game.total} — what does it mean?</p>
-       <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button>`
+       <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button><button class="btn secondary" id="qSlow" style="margin-top:10px">🐢 Play slowly</button>`
     : `<p class="sub">Round ${game.round} of ${game.total} — how do you say…</p>
        <div class="bigword" style="margin:12px 0"><div style="font-size:1.6rem;font-weight:800">“${cur.en}”</div></div>`;
   quizShell(scr, { title, back, round: game.round, total: game.total, score: game.score, body: `${prompt}
       <div class="choices" id="qChoices">
         ${options.map((o, i) => game.mode === "listen"
-          ? `<div class="choice" data-i="${i}" style="font-size:.98rem">${o.en}</div>`
-          : `<div class="choice" data-i="${i}"><span class="pinyin" style="font-size:1.2rem">${o.py}</span></div>`).join("")}
+          ? `<button class="choice" data-i="${i}" style="font-size:.98rem">${o.en}</button>`
+          : `<button class="choice" data-i="${i}"><span class="pinyin" style="font-size:1.2rem">${o.py}</span></button>`).join("")}
       </div>
-      <div class="feedback" id="qFb"></div>` });
+      <div role="status" class="feedback" id="qFb"></div>` });
   if (game.mode === "listen") {
-    $("#qPlay").addEventListener("click", () => TTSm.speak(cur.hz, { rate: 0.75 }));
-    setTimeout(() => TTSm.speak(cur.hz, { rate: 0.75 }), 350);
+    $("#qPlay").addEventListener("click", () => TTSm.speak(cur.hz, {}));
+    $("#qSlow").addEventListener("click", () => TTSm.speak(cur.hz, { slow: true }));
+    Session.later(() => TTSm.speak(cur.hz, {}), 350);
   }
   scr.querySelectorAll("#qChoices .choice").forEach(el =>
     el.addEventListener("click", () => {
@@ -552,11 +670,11 @@ function choiceRound(game, scr, { title, back }) {
       el.classList.add(ok ? "correct" : "wrong");
       if (!ok) $(`#qChoices .choice[data-i="${options.indexOf(cur)}"]`).classList.add("correct");
       if (ok) game.score++;
-      $(".game-head .score").textContent = `${game.score} ⭐`;
-      if (game.mode === "read") TTSm.speak(cur.hz, { rate: 0.8 });
+      $(".screen.active .game-head .score").textContent = `${game.score} ⭐`;
+      if (game.mode === "read") TTSm.speak(cur.hz, {});
       $("#qFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) +
         `<div class="detail"><b class="pinyin">${cur.py}</b> = ${cur.en}</div>`;
-      setTimeout(() => game.next(), ok ? 1400 : 2700);
+      roundControls(scr, game, cur.hz);
     }));
 }
 // Pick N distinct phrases from a pool, favouring variety.
@@ -577,6 +695,7 @@ const LessonQuiz = {
     this.round = 0; this.score = 0; this.next();
   },
   next() {
+    Session.cancel();
     this.round++;
     if (this.round > this.total) return this.finish();
     this.current = this.queue[this.round - 1];
@@ -607,14 +726,15 @@ const LessonQuiz = {
 
 /* ---- Scope picker shared by the games ---- */
 function scopePool(scope) {
-  if (scope === "learned") { const p = Progress.learnedPhrases(); return p.length >= 8 ? p : LESSONS.flatMap(l => l.phrases); }
+  if (scope === "learned") { const p = Progress.learnedPhrases(); return p; }
   if (scope === "all") return LESSONS.flatMap(l => l.phrases);
   const l = LESSONS.find(x => x.id === scope);
-  return l ? l.phrases : LESSONS.flatMap(x => x.phrases);
+  return l ? l.phrases : LESSONS[0].phrases;
 }
 function renderPicker(scr, { title, emoji, blurb, other, otherLabel, storeKey, onStart }) {
   const learnedN = Progress.learnedPhrases().length;
-  let scope = store.get(storeKey, learnedN >= 8 ? "learned" : "all");
+  let scope = store.get(storeKey, learnedN >= 8 ? "learned" : (Progress.nextLesson() || LESSONS[0]).id);
+  if (!["learned", "all", ...LESSONS.map(l => l.id)].includes(scope)) scope = LESSONS[0].id;
   const draw = () => {
     // Name of the current selection, so Start always says what it will play.
     const picked = LESSONS.find(l => l.id === scope);
@@ -625,13 +745,13 @@ function renderPicker(scr, { title, emoji, blurb, other, otherLabel, storeKey, o
     scr.innerHTML = `
       <h2 style="margin-top:8px">${emoji} ${escapeHtml(title)}</h2>
       <p class="sub">${escapeHtml(blurb)}</p>
-      <button class="btn big" id="pkStart" style="margin-top:16px">▶︎ Start — ${escapeHtml(scopeName)}</button>
+      <button class="btn big" id="pkStart" style="margin-top:16px" ${scope === "learned" && !learnedN ? "disabled" : ""}>▶︎ Start — ${escapeHtml(scopeName)}</button>
       <p class="sub" style="margin-top:18px"><b>Which words?</b></p>
       <div class="catbar" style="flex-wrap:wrap">
         <span class="catchip${scope === "learned" ? " on" : ""}" data-s="learned">✓ Lessons I've finished${learnedN ? ` (${learnedN})` : ""}</span>
         <span class="catchip${scope === "all" ? " on" : ""}" data-s="all">📚 Everything</span>
       </div>
-      ${scope === "learned" && learnedN < 8 ? `<p class="sub">Finish a couple of lessons first and this option will use just those words. For now it uses everything.</p>` : ""}
+      ${scope === "learned" && !learnedN ? `<p class="sub" role="status">Finish a lesson to unlock this selection, or choose a lesson below.</p>` : ""}
       <details class="fold" id="pkLessons" style="margin-top:14px"${oneLessonChosen ? " open" : ""}>
         <summary>📚 Or pick one lesson${oneLessonChosen ? ` — ${escapeHtml(picked.title)}` : ""}</summary>
         <div class="catbar" style="flex-wrap:wrap">
@@ -658,10 +778,12 @@ const WordGame = {
   },
   start(scope) {
     this.scope = scope || this.scope; this.pool = scopePool(this.scope);
+    if (!this.pool.length) return this.pick();
     this.queue = pickRounds(this.pool, this.total);
     this.round = 0; this.score = 0; this.next();
   },
   next() {
+    Session.cancel();
     this.round++;
     if (this.round > this.total) return this.finish();
     this.current = this.queue[this.round - 1];
@@ -696,17 +818,16 @@ const BuildGame = {
     });
   },
   buildable(pool) {
-    let p = pool.filter(w => w.parts && w.parts.length >= 3);
-    if (p.length < 5) p = pool.filter(w => w.parts && w.parts.length >= 2);
-    if (p.length < 5) p = LESSONS.flatMap(l => l.phrases).filter(w => w.parts && w.parts.length >= 3);
-    return p;
+    return pool.filter(w => w.parts && w.parts.length >= 2);
   },
   start(scope) {
     this.scope = scope || this.scope; this.pool = this.buildable(scopePool(this.scope));
+    if (!this.pool.length) return this.pick();
     this.queue = pickRounds(this.pool, this.total);
     this.round = 0; this.score = 0; this.next();
   },
   next() {
+    Session.cancel();
     this.round++;
     if (this.round > this.total) return this.finish();
     const cur = this.current = this.queue[this.round - 1];
@@ -721,9 +842,9 @@ const BuildGame = {
       <div class="bigword" style="margin:12px 0"><div style="font-size:1.5rem;font-weight:800">“${cur.en}”</div></div>
       <div class="slots" id="bdSlots"></div>
       <div class="tiles" id="bdTiles"></div>
-      <div class="feedback" id="bdFb"><span class="sub">Tap the tiles in order. Tap a placed tile to put it back.</span></div>
+      <div role="status" class="feedback" id="bdFb"><span class="sub">Tap the tiles in order. Tap a placed tile to put it back.</span></div>
       <button class="btn secondary" id="bdHear" style="margin-top:8px">🔊 Hear it</button>` });
-    $("#bdHear").addEventListener("click", () => TTSm.speak(cur.hz, { rate: 0.75 }));
+    $("#bdHear").addEventListener("click", () => TTSm.speak(cur.hz, {}));
     this.draw();
   },
   draw() {
@@ -747,12 +868,12 @@ const BuildGame = {
     const ok = got === want;
     $("#bdSlots").classList.add(ok ? "correct" : "wrong");
     if (ok) this.score++;
-    $(".game-head .score").textContent = `${this.score} ⭐`;
-    TTSm.speak(cur.hz, { rate: 0.8 });
+    $(".screen.active .game-head .score").textContent = `${this.score} ⭐`;
+    TTSm.speak(cur.hz, {});
     $("#bdFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) +
       `<div class="detail"><b class="pinyin">${cur.py}</b> — ${cur.parts.map(p => `${p[0]} (${p[1]})`).join(" · ")}</div>`;
     this.draw();
-    setTimeout(() => this.next(), ok ? 1800 : 3600);
+    roundControls($("#screen-build"), this, cur.hz);
   },
   finish() {
     bumpStreak(); showStreak();
@@ -787,7 +908,7 @@ function renderLearn() {
         <div class="sub">${TONES[tn].desc}<br><i>${TONES[tn].tip}</i></div>
       </div>
       <div class="say">🔊</div>`;
-    card.addEventListener("click", () => TTSm.speak(item.hz, { rate: 0.75 }));
+    card.addEventListener("click", () => TTSm.speak(item.hz, {}));
     wrap.appendChild(card);
     drawToneCurve(card.querySelector("canvas"), tn);
   });
@@ -805,6 +926,7 @@ const EarGame = {
     this.next();
   },
   next() {
+    Session.cancel();
     this.round++;
     if (this.round > this.total) return this.finish();
     const fam = rnd(FAMILIES);
@@ -818,19 +940,19 @@ const EarGame = {
         <p class="sub">Round ${this.round} of ${this.total} — which tone do you hear?</p>
         <button class="btn jade big" id="earPlay" style="margin-top:14px">🔊 Play the word</button>
         <div class="choices" id="earChoices"></div>
-        <div class="feedback" id="earFb"></div>
+        <div role="status" class="feedback" id="earFb"></div>
       </div>`;
     const choices = $("#earChoices");
     [1, 2, 3, 4].forEach(tn => {
-      const b = document.createElement("div");
+      const b = document.createElement("button");
       b.className = "choice";
       b.innerHTML = `<canvas class="curveicon curve"></canvas>${TONES[tn].name}`;
       b.addEventListener("click", () => this.answer(tn, b));
       choices.appendChild(b);
       drawToneCurve(b.querySelector("canvas"), tn);
     });
-    $("#earPlay").addEventListener("click", () => TTSm.speak(this.current.hz, { rate: 0.75 }));
-    setTimeout(() => TTSm.speak(this.current.hz, { rate: 0.75 }), 350);
+    $("#earPlay").addEventListener("click", () => TTSm.speak(this.current.hz, {}));
+    Session.later(() => TTSm.speak(this.current.hz, {}), 350);
     this.answered = false;
   },
   answer(tn, el) {
@@ -843,10 +965,10 @@ const EarGame = {
       right.classList.add("correct");
     }
     if (ok) this.score++;
-    $(".game-head .score").textContent = `${this.score} ⭐`;
+    $(".screen.active .game-head .score").textContent = `${this.score} ⭐`;
     $("#earFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) +
       `<div class="detail"><b class="pinyin">${this.current.py}</b> = ${this.current.en}. ${TONE_EXPLAIN[this.current.tone]}</div>`;
-    setTimeout(() => this.next(), ok ? 1400 : 2600);
+    roundControls($("#screen-ear"), this, this.current.hz);
   },
   finish() {
     bumpStreak(); showStreak();
@@ -870,6 +992,7 @@ const PairsGame = {
   round: 0, score: 0, total: 10, current: null, correctSide: null,
   start() { this.round = 0; this.score = 0; this.next(); },
   next() {
+    Session.cancel();
     this.round++;
     if (this.round > this.total) return this.finish();
     this.current = rnd(PAIRS);
@@ -884,15 +1007,15 @@ const PairsGame = {
         <p class="sub">Round ${this.round} of ${this.total} — which word did you hear?</p>
         <button class="btn jade big" id="prPlay" style="margin-top:14px">🔊 Play the word</button>
         <div class="choices">
-          <div class="choice" id="prA"><span class="pinyin" style="font-size:1.6rem">${cur.a.py}</span><div class="sub">${cur.a.en}</div></div>
-          <div class="choice" id="prB"><span class="pinyin" style="font-size:1.6rem">${cur.b.py}</span><div class="sub">${cur.b.en}</div></div>
+          <button class="choice" id="prA"><span class="pinyin" style="font-size:1.6rem">${cur.a.py}</span><span class="sub">${cur.a.en}</span></button>
+          <button class="choice" id="prB"><span class="pinyin" style="font-size:1.6rem">${cur.b.py}</span><span class="sub">${cur.b.en}</span></button>
         </div>
-        <div class="feedback" id="prFb"></div>
+        <div role="status" class="feedback" id="prFb"></div>
       </div>`;
-    $("#prPlay").addEventListener("click", () => TTSm.speak(target.hz, { rate: 0.75 }));
+    $("#prPlay").addEventListener("click", () => TTSm.speak(target.hz, {}));
     $("#prA").addEventListener("click", () => this.answer("a"));
     $("#prB").addEventListener("click", () => this.answer("b"));
-    setTimeout(() => TTSm.speak(target.hz, { rate: 0.75 }), 350);
+    Session.later(() => TTSm.speak(target.hz, {}), 350);
     this.answered = false;
   },
   answer(side) {
@@ -902,9 +1025,9 @@ const PairsGame = {
     $(side === "a" ? "#prA" : "#prB").classList.add(ok ? "correct" : "wrong");
     if (!ok) $(this.correctSide === "a" ? "#prA" : "#prB").classList.add("correct");
     if (ok) this.score++;
-    $(".game-head .score").textContent = `${this.score} ⭐`;
+    $(".screen.active .game-head .score").textContent = `${this.score} ⭐`;
     $("#prFb").innerHTML = (ok ? rnd(PRAISE) : rnd(ENCOURAGE)) + `<div class="detail">${this.current.note}</div>`;
-    setTimeout(() => this.next(), ok ? 1500 : 2800);
+    roundControls($("#screen-pairs"), this, this.current[this.correctSide].hz);
   },
   finish() {
     bumpStreak(); showStreak();
@@ -924,12 +1047,14 @@ const PairsGame = {
 
 /* ---- Speak game: Pitch Painter ---- */
 const SpeakGame = {
-  idx: 0, audioCtx: null, analyser: null, stream: null, recording: false, animId: null,
+  idx: 0, audioCtx: null, analyser: null, stream: null, recording: false, animId: null, requestId: 0, pending: false,
   enter() {
     this.idx = store.get("speakIdx", 0) % SPEAK_TARGETS.length;
     this.render();
   },
   stopMic() {
+    this.requestId++;
+    this.pending = false;
     if (this.animId) { cancelAnimationFrame(this.animId); this.animId = null; }
     this.recording = false;
     if (this.stream) {
@@ -939,7 +1064,7 @@ const SpeakGame = {
       this.stream = null;
     }
     if (this.audioCtx && this.audioCtx.state === "running") {
-      try { this.audioCtx.suspend(); } catch {}
+      try { this.audioCtx.suspend().catch(() => {}); } catch {}
     }
     const mic = $("#spMic");
     if (mic) { mic.classList.remove("recording"); mic.textContent = "🎙"; }
@@ -957,10 +1082,11 @@ const SpeakGame = {
           <div class="sub" style="margin-top:4px"><i>${TONES[t.tone].tip}</i></div>
         </div>
         <div class="pitchbox"><span class="hint">Your voice (dashed) vs target</span><canvas class="curve" id="speakCanvas"></canvas></div>
-        <div class="feedback" id="spFb">Tap ▶︎ to hear it, then 🎙 and say it!</div>
+        <p class="sub">Explore your pitch shape. This is an estimate, not a pronunciation test.</p>
+        <div role="status" class="feedback" id="spFb">Tap ▶︎ to hear it, then 🎙 and say it!</div>
         <div class="speak-controls">
           <button class="roundbtn" id="spHear" title="Hear it">▶︎</button>
-          <button class="micbtn" id="spMic">🎙</button>
+          <button class="micbtn" id="spMic" aria-label="Record your pitch">🎙</button>
           <button class="roundbtn" id="spSlow" title="Hear it slowly">🐢</button>
         </div>
         <div class="btn-row">
@@ -969,16 +1095,21 @@ const SpeakGame = {
         </div>
       </div>`;
     drawToneCurve($("#speakCanvas"), t.tone);
-    $("#spHear").addEventListener("click", () => TTSm.speak(t.hz, { rate: 0.8 }));
-    $("#spSlow").addEventListener("click", () => TTSm.speak(t.hz, { rate: 0.5 }));
+    $("#spHear").addEventListener("click", () => TTSm.speak(t.hz, {}));
+    $("#spSlow").addEventListener("click", () => TTSm.speak(t.hz, { slow: true }));
     $("#spNext").addEventListener("click", () => { this.stopMic(); this.idx++; store.set("speakIdx", this.idx); this.render(); });
     $("#spPrev").addEventListener("click", () => { this.stopMic(); this.idx = (this.idx + SPEAK_TARGETS.length - 1) % SPEAK_TARGETS.length; store.set("speakIdx", this.idx); this.render(); });
     $("#spMic").addEventListener("click", () => this.record());
   },
-  async ensureMic() {
+  async ensureMic(requestId) {
     if (this.stream && this.stream.active) return true;
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } });
+      const stream = await acquireCurrentMic(
+        () => navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false } }),
+        () => this.requestId === requestId && !document.hidden && $("#screen-speak").classList.contains("active")
+      );
+      if (!stream) return false;
+      this.stream = stream;
       this.audioCtx = this.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       const src = this.audioCtx.createMediaStreamSource(this.stream);
       this.analyser = this.audioCtx.createAnalyser();
@@ -986,14 +1117,25 @@ const SpeakGame = {
       src.connect(this.analyser);
       return true;
     } catch (e) {
+      if (this.requestId !== requestId) return false;
+      this.stopMic();
       $("#spFb").innerHTML = `🎙 Microphone blocked.<div class="detail">Allow the mic in Settings → Safari (or the permission popup) and try again.</div>`;
       return false;
     }
   },
   async record() {
-    if (this.recording) return;
-    if (!(await this.ensureMic())) return;
-    if (this.audioCtx.state === "suspended") await this.audioCtx.resume();
+    if (this.recording || this.pending) return;
+    const requestId = ++this.requestId;
+    this.pending = true;
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    if (!(await this.ensureMic(requestId))) { if (this.requestId === requestId) this.pending = false; return; }
+    try { if (this.audioCtx.state === "suspended") await this.audioCtx.resume(); }
+    catch { this.stopMic(); return; }
+    if (this.requestId !== requestId || document.hidden || !$("#screen-speak").classList.contains("active")) {
+      if (this.requestId === requestId) this.stopMic();
+      return;
+    }
+    this.pending = false;
     this.recording = true;
     const mic = $("#spMic"); mic.classList.add("recording"); mic.textContent = "👂";
     $("#spFb").textContent = "Listening… say it now!";
@@ -1001,11 +1143,15 @@ const SpeakGame = {
     const freqs = [];
     const t0 = performance.now();
     const DURATION = 1800;
+    let lastSample = -Infinity;
     const loop = () => {
       if (!this.recording) return;
-      this.analyser.getFloatTimeDomainData(buf);
-      const { freq } = autoCorrelate(buf, this.audioCtx.sampleRate);
-      if (freq > 0) freqs.push(freq);
+      if (performance.now() - lastSample >= 50) {
+        lastSample = performance.now();
+        this.analyser.getFloatTimeDomainData(buf);
+        const { freq } = autoCorrelate(buf, this.audioCtx.sampleRate);
+        if (freq > 0) freqs.push(freq);
+      }
       if (performance.now() - t0 < DURATION) {
         this.animId = requestAnimationFrame(loop);
       } else {
@@ -1026,18 +1172,37 @@ const SpeakGame = {
     }
     drawToneCurve($("#speakCanvas"), t.tone, { user: contour });
     const { tone, conf } = classifyTone(contour);
-    if (tone === t.tone) {
-      $("#spFb").innerHTML = `${rnd(PRAISE)}<div class="detail">That's a textbook ${TONES[t.tone].name}. Tap Next ›</div>`;
-    } else if (tone === 0) {
+    if (tone === t.tone && conf >= 0.6) {
+      $("#spFb").innerHTML = `${rnd(PRAISE)}<div class="detail">Your pitch shape resembles ${TONES[t.tone].name}. This is an estimate, not a pronunciation score.</div>`;
+    } else if (tone === 0 || conf < 0.6) {
       $("#spFb").innerHTML = `Hmm, hard to read that one.<div class="detail">Try holding the vowel longer — exaggerate the shape.</div>`;
     } else {
-      $("#spFb").innerHTML = `Close! That sounded like a <b>${TONES[tone].name}</b>.<div class="detail">Target: ${TONE_EXPLAIN[t.tone]} You did: ${TONE_EXPLAIN[tone]} Compare the curves above, listen 🐢, and try again.</div>`;
+      $("#spFb").innerHTML = `The pitch estimate resembles <b>${TONES[tone].name}</b>.<div class="detail">Target: ${TONE_EXPLAIN[t.tone]} You did: ${TONE_EXPLAIN[tone]} Compare the curves above, listen 🐢, and try again.</div>`;
     }
   },
 };
 
 /* ---- boot ---- */
+// Add keyboard semantics to existing navigation cards and choice chips.
+function enhanceControls() {
+  document.querySelectorAll("div[data-go], .lessonrow, .catchip, .tile, .tone-card").forEach(el => {
+    el.setAttribute("role", "button");
+    const disabled = el.classList.contains("used") || (el.classList.contains("tile") && BuildGame.answered);
+    el.tabIndex = disabled ? -1 : 0;
+    el.setAttribute("aria-disabled", String(disabled));
+    if (el.classList.contains("catchip")) el.setAttribute("aria-pressed", String(el.classList.contains("on")));
+  });
+}
+document.body.addEventListener("keydown", event => {
+  const target = event.target.closest('[role="button"]');
+  if (target && (event.key === "Enter" || event.key === " ") && !event.repeat) {
+    event.preventDefault();
+    if (target.getAttribute("aria-disabled") !== "true") target.click();
+  }
+});
+new MutationObserver(enhanceControls).observe(document.getElementById("app"), { childList: true, subtree: true });
 renderHome();
+enhanceControls();
 // iOS: voices often load only after first interaction
 const initVoices = () => { if (!TTSm.voices.length) TTSm.load(); };
 ["touchstart", "pointerdown", "click"].forEach(evt => document.body.addEventListener(evt, initVoices, { once: true }));
@@ -1051,18 +1216,17 @@ if (soundFold) {
 
 // Privacy & hardware: release microphone when page is hidden or user navigates away
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) SpeakGame.stopMic();
+  if (document.hidden) {
+    Session.cancel(); SpeakGame.stopMic();
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    TTSm.currentUtterance = null;
+  }
 });
 window.addEventListener("pagehide", () => {
+  Session.cancel();
   SpeakGame.stopMic();
+  if (window.speechSynthesis) speechSynthesis.cancel();
 });
 
-// Service worker: registers, and reloads once when a new version has been installed.
-if ("serviceWorker" in navigator && location.protocol === "https:") {
-  let refreshing = false;
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (refreshing) return; refreshing = true; location.reload();
-  });
-  navigator.serviceWorker.register("sw.js").then(reg => reg.update().catch(() => {})).catch(() => {});
-}
+// Offline installation and explicit update controls live in offline.js.
 }

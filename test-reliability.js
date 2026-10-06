@@ -1,0 +1,65 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { createSessionTimers, speechRate, acquireCurrentMic, restoreBackup, validateBackupData } = require('./app');
+
+test('navigation cancels audio timers, including a callback already queued by the event loop', () => {
+  const callbacks = [], cancelled = [];
+  const session = createSessionTimers(fn => { callbacks.push(fn); return callbacks.length; }, id => cancelled.push(id));
+  let spoken = 0;
+  session.later(() => spoken++, 350);
+  session.cancel();
+  callbacks[0]();
+  assert.equal(spoken, 0);
+  assert.deepEqual(cancelled, [1]);
+  session.later(() => spoken++, 350);
+  callbacks[1]();
+  assert.equal(spoken, 1);
+});
+
+test('a late microphone grant releases every track after leaving the screen', async () => {
+  let grant, current = true, stopped = 0;
+  const pending = acquireCurrentMic(() => new Promise(resolve => { grant = resolve; }), () => current);
+  current = false;
+  grant({ getTracks: () => [{stop: () => stopped++}, {stop: () => stopped++}] });
+  assert.equal(await pending, null);
+  assert.equal(stopped, 2);
+});
+
+test('a current microphone request can proceed and permission failure propagates', async () => {
+  const stream = { getTracks: () => [] };
+  assert.equal(await acquireCurrentMic(async () => stream, () => true), stream);
+  await assert.rejects(acquireCurrentMic(async () => { throw Error('permission denied'); }, () => true));
+});
+
+test('all playback rates respect settings and slow is slower even at the minimum', () => {
+  for (const rate of [0.5, 0.7, 0.9, 1.1]) {
+    assert.equal(speechRate(rate), rate);
+    assert.ok(speechRate(rate, true) < rate);
+  }
+  assert.equal(speechRate(NaN), 0.9);
+  assert.equal(speechRate(2), 1.1);
+  assert.equal(speechRate(0.1), 0.5);
+});
+
+test('backup failure rolls back earlier writes and never reports success', () => {
+  const data = new Map([['pp_streak', '3'], ['pp_rate', '0.9']]);
+  const storage = {
+    getItem: key => data.get(key) ?? null,
+    setItem: (key, value) => { if (key === 'pp_rate' && value === '0.7') throw Error('quota'); data.set(key,value); },
+    removeItem: key => data.delete(key)
+  };
+  const result = restoreBackup(storage, {streak:8, practiceMode:'mixed', rate:0.7});
+  assert.deepEqual(result, {ok:false, reason:'storage', rolledBack:true});
+  assert.deepEqual([...data], [['pp_streak','3'],['pp_rate','0.9']]);
+  assert.deepEqual(restoreBackup(storage, {streak:5}), {ok:true});
+  assert.equal(data.get('pp_streak'), '5');
+});
+
+test('unavailable storage or failed rollback is reported; old backups still work', () => {
+  const unavailable = {getItem: () => null, setItem: () => {throw Error('blocked');}, removeItem: () => {throw Error('blocked');}};
+  assert.deepEqual(restoreBackup(unavailable, {streak:2}), {ok:false,reason:'storage',rolledBack:false});
+  assert.deepEqual(restoreBackup(unavailable, {unexpected:2}), {ok:false,reason:'invalid'});
+  assert.deepEqual(validateBackupData({streak:2,lessonScores:{hello:5}}), {streak:2,lessonScores:{hello:5}});
+  assert.equal(validateBackupData({practiceMode:'injected'}), null);
+  assert.deepEqual(validateBackupData({practiceMode:'listen'}), {practiceMode:'listen'});
+});

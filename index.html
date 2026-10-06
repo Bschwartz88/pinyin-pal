@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Pinyin Pal</title>
 <meta name="description" content="Learn everyday Mandarin — lessons, phrasebook and games. Pinyin only.">
 <link rel="manifest" href="manifest.json">
@@ -23,6 +23,18 @@
   --radius:20px;
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
+button,select,input{font:inherit}
+:focus-visible{outline:3px solid var(--blue);outline-offset:4px}
+.phrase-play{border:0;background:transparent;min-width:44px;min-height:44px;cursor:pointer}
+.choice .sub{display:block}
+.choice:disabled{opacity:1;color:var(--ink);cursor:default}
+.round-controls{flex-wrap:wrap}
+.round-controls .btn{padding:14px 10px;min-width:90px}
+[role="button"]{cursor:pointer}
+#storageNotice:not(:empty){border:1px solid var(--red);padding:12px;color:var(--red)}
+#playbackNotice{margin:12px 20px 0;padding:12px;border:1px solid var(--red);border-radius:12px;background:var(--bg);color:var(--red)}
+#playbackNotice:empty{display:none}
 html,body{height:100%}
 body{
   font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
@@ -181,6 +193,8 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
   </div>
 
   <!-- HOME -->
+  <p id="playbackNotice" role="status"></p>
+  <p id="storageNotice" role="status" class="sub" style="margin:12px 20px 0"></p>
   <section class="screen active" id="screen-home">
     <h1 style="margin-top:10px">Nǐ hǎo! 👋</h1>
     <p class="sub">Learn a little, then use it. Lessons teach; games make it stick.</p>
@@ -265,11 +279,21 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
   <!-- SETTINGS -->
   <section class="screen" id="screen-settings">
     <h2 style="margin-top:8px">Settings</h2>
+    <details class="card" style="margin-top:14px">
+      <summary>Offline setup (optional)</summary>
+      <p class="sub" style="margin-top:10px;line-height:1.5">Open this site in Safari, tap Share, then Add to Home Screen. If offered, turn on Open as Web App. Open the new icon while connected to finish setup.</p>
+      <p id="offlineStatus" class="sub" role="status" style="margin-top:10px;line-height:1.5">Checking offline files…</p>
+      <p class="sub" style="margin-top:10px;line-height:1.5">Download a Mandarin voice in iPhone Settings → Accessibility → Read &amp; Speak (or Spoken Content) → Voices. Then turn off Wi-Fi and mobile data, reopen this app, and play several phrases. Browser data can be cleared by iOS; export progress periodically.</p>
+      <button class="btn secondary" id="offlineCheck" style="margin-top:14px">Check offline files</button>
+      <button class="btn" id="offlineUpdate" style="margin-top:14px" hidden>Update and restart</button>
+    </details>
+    <div class="setrow"><label for="practiceMode">Practice style</label><select id="practiceMode"><option value="listen">Listening</option><option value="mixed">Listening + pinyin</option></select></div>
+    <p id="audioStatus" class="sub" role="status" style="margin-top:12px"></p>
     <div class="card" style="margin-top:14px">
       <div class="setrow"><div><b>Voice</b><div class="sub">Chinese voices on this device</div></div>
-        <select id="voiceSelect"></select></div>
+        <select id="voiceSelect" aria-label="Mandarin voice"></select></div>
       <div class="setrow"><div><b>Speed</b><div class="sub" id="rateLabel">Normal</div></div>
-        <input type="range" id="rateSlider" min="0.5" max="1.1" step="0.1" value="0.9"></div>
+        <input aria-label="Playback speed" type="range" id="rateSlider" min="0.5" max="1.1" step="0.1" value="0.9"></div>
       <div class="setrow"><div><b>Test voice</b><div class="sub">nǐ hǎo — hello</div></div>
         <button class="btn secondary" id="testVoice">▶︎ Play</button></div>
       <div class="setrow"><div><b>Export progress</b><div class="sub">Save backup or transfer to iPhone/iPad</div></div>
@@ -279,8 +303,12 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
         <input type="file" id="importFile" accept=".json" style="display:none"></div>
       <div class="setrow"><div><b>Reset progress</b><div class="sub">Clears lessons, scores &amp; streak</div></div>
         <button class="btn secondary" id="resetBtn">Reset</button></div>
+      <div id="resetConfirm" hidden role="group" aria-label="Confirm reset" style="padding:14px 0">
+        <p>Clear all progress on this device? Export a backup first if you want to keep it.</p>
+        <div class="btn-row"><button class="btn secondary" id="cancelReset">Keep progress</button><button class="btn" id="confirmReset">Clear progress</button></div>
+      </div>
     </div>
-    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.4.2</span> · All progress stays on this device.</p>
+    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.6.2</span> · All progress stays on this device.</p>
   </section>
 
   <nav class="nav">
@@ -293,6 +321,7 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
 </div>
 <script src="data.js"></script>
 <script src="lessons.js"></script>
+<script src="offline.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

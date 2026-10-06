@@ -1,0 +1,5 @@
+# Keep local review artifacts and screenshots out of the public site/repository.
+REVIEW.md
+IPHONE-TESTING.md
+*-preview.png
+PR-BODY.md

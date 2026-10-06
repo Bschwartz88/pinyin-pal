@@ -1,44 +1,36 @@
-// Pinyin Pal service worker
-// Strategy: network-first for the app's own files (so updates show up on the next open),
-// falling back to the cache when offline. Icons are cache-first.
-const VERSION = "pp-v0.4.2";
-const ASSETS = ["./", "index.html", "app.js", "data.js", "lessons.js", "manifest.json", "icon-192.png", "icon-512.png"];
-
-self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+// Bump VERSION whenever an app asset changes. Cache each release as a unit.
+const VERSION = "v0.6.2";
+const PREFIX = `pinyin-pal:${self.registration.scope}:`;
+const CACHE = PREFIX + VERSION;
+const ASSETS = ["./", "index.html", "app.js", "offline.js", "data.js", "lessons.js", "manifest.json", "icon-192.png", "icon-512.png"];
+const urls = ASSETS.map(path => new URL(path, self.registration.scope).href);
+self.addEventListener("install", event => {
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(urls.map(url => new Request(url, { cache: "reload" })))));
+  // Updates wait until the learner restarts or closes all app windows.
 });
-self.addEventListener("activate", e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
+self.addEventListener("activate", event => {
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith(PREFIX) && key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  // Leave unscoped legacy caches alone to protect other apps on this origin.
 });
-self.addEventListener("fetch", e => {
-  if (e.request.method !== "GET") return;
-  const url = new URL(e.request.url);
-
-  // Security: only intercept and cache same-origin requests over http/https
-  if (url.origin !== self.location.origin) return;
-  if (url.protocol !== "http:" && url.protocol !== "https:") return;
-
-  const isIcon = /\.png$/.test(url.pathname);
-  if (isIcon) {
-    e.respondWith(caches.match(e.request).then(hit => hit || fetch(e.request)));
-    return;
+self.addEventListener("message", event => {
+  if (event.data?.type === "ACTIVATE_UPDATE") event.waitUntil(self.skipWaiting());
+  if (event.data?.type === "OFFLINE_STATUS" && event.ports[0]) {
+    event.waitUntil(caches.open(CACHE).then(async cache => {
+      const results = await Promise.all(urls.map(url => cache.match(url)));
+      event.ports[0].postMessage({ version: VERSION, ready: results.every(Boolean) });
+    }));
   }
-  e.respondWith(
-    fetch(e.request).then(res => {
-      if (res && res.ok) { const copy = res.clone(); caches.open(VERSION).then(c => c.put(e.request, copy)); }
-      return res;
-    }).catch(() =>
-      caches.match(e.request, { ignoreSearch: true }).then(hit => {
-        if (hit) return hit;
-        // Security: only fall back to index.html for navigation requests to prevent MIME/script confusion
-        if (e.request.mode === "navigate") {
-          return caches.match("index.html");
-        }
-        return new Response("Not found", { status: 404, statusText: "Not Found" });
-      })
-    )
-  );
+});
+self.addEventListener("fetch", event => {
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  url.search = "";
+  if (!urls.includes(url.href)) return;
+  event.respondWith(caches.open(CACHE).then(async cache => {
+    const hit = await cache.match(url.href);
+    if (hit) return hit;
+    return new Response("Offline files are incomplete. Reconnect and check for updates in Settings.", {
+      status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" }
+    });
+  }));
 });

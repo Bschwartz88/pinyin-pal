@@ -1,7 +1,7 @@
 {
   "name": "Pinyin Pal",
   "short_name": "Pinyin Pal",
-  "description": "Voice-first Mandarin tone trainer — pinyin only.",
+  "description": "Everyday Mandarin listening, lessons and games — pinyin only.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

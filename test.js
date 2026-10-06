@@ -21,8 +21,8 @@ for (const l of LESSONS) {
   const seen = new Set();
   for (const p of l.phrases) {
     ok(p.hz && p.py && p.en, `phrase missing field in ${l.id}: ${JSON.stringify(p)}`);
-    ok(HANZI.test(p.hz.replace(/Xiaoming/g, "")) || /小明/.test(p.hz), `hanzi field has non-hanzi in ${l.id}: ${p.hz}`);
-    ok(TONE_MARK.test(p.py) || /^(Xiaoming|ma|ne|de|le|ba|ge|men)\b/.test(p.py) || /xièxie|bàibai|māma|bàba/.test(p.py),
+    ok(HANZI.test(p.hz), `hanzi field has non-hanzi in ${l.id}: ${p.hz}`);
+    ok(TONE_MARK.test(p.py) || /^(ma|ne|de|le|ba|ge|men)\b/.test(p.py) || /xièxie|bàibai|māma|bàba/.test(p.py),
        `pinyin without tone mark in ${l.id}: ${p.py}`);
     ok(!seen.has(p.py), `duplicate pinyin in ${l.id}: ${p.py}`); seen.add(p.py);
     if (p.parts) {
