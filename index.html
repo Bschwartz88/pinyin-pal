@@ -194,6 +194,7 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
 
   <!-- HOME -->
   <p id="playbackNotice" role="status"></p>
+  <p id="speechLeadIn" class="sub" style="margin:12px 20px" hidden>First you'll hear <b>“tīng” (“listen”)</b>, then the phrase. You don't need to repeat “tīng.” It's just your cue to listen.</p>
   <p id="storageNotice" role="status" class="sub" style="margin:12px 20px 0"></p>
   <section class="screen active" id="screen-home">
     <h1 style="margin-top:10px">Nǐ hǎo! 👋</h1>
@@ -259,7 +260,7 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
         </div>
       </div>
     </details>
-    <div class="notice" id="voiceNotice">⚠️ No Chinese voice found on this device yet. On iPhone/iPad: <b>Settings → Accessibility → Spoken Content → Voices → Chinese</b> and download a voice (Tingting recommended).</div>
+    <div class="notice" id="voiceNotice">No Mandarin voice is available in this browser. <button class="backlink" data-go="settings">Set up audio ›</button></div>
   </section>
 
   <!-- LESSONS -->
@@ -299,6 +300,18 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
     </details>
     <div class="setrow"><label for="practiceMode">Practice style</label><select id="practiceMode"><option value="listen">Listening</option><option value="mixed">Listening + pinyin</option></select></div>
     <p id="audioStatus" class="sub" role="status" style="margin-top:12px"></p>
+    <details class="card" id="voiceHelp" style="margin-top:14px">
+      <summary>How to set up Mandarin audio</summary>
+      <p style="margin-top:12px">First try this app in Chrome on your computer or Safari on your iPhone. A built-in preview browser may not offer the same voices.</p>
+      <p>Adding a Mandarin voice is normally a one-time setup on each device. Your device stays in English; this app uses Mandarin only for its own audio. After downloading, refresh this page so the voice can appear. If it is still missing, close and reopen your browser.</p>
+      <h3>Windows</h3>
+      <ol style="padding-left:22px;line-height:1.6"><li>Open Windows Settings → Time &amp; language → Speech.</li><li>Under Manage voices, choose Add voices. Select Chinese (Simplified, China) and download it.</li><li>Once the download finishes, close and reopen Chrome. Return here, choose a Mandarin voice below, and press Play.</li></ol>
+      <p class="sub">You do not need to change your Windows display language or turn on Narrator. <a href="https://support.microsoft.com/en-us/accessibility/windows/narrator/appendix-a-supported-languages-and-voices" target="_blank" rel="noopener noreferrer">Microsoft voice setup help</a></p>
+      <h3>iPhone / iPad</h3>
+      <ol style="padding-left:22px;line-height:1.6"><li>Open device Settings → Accessibility → Read &amp; Speak (called Spoken Content on some versions) → Voices.</li><li>Choose Chinese, then a Mandarin voice, and download it while connected.</li><li>Reopen this app in Safari, choose the voice below, and press Play.</li></ol>
+      <p class="sub">Available voices vary by browser. If you hear nothing, check media volume and Bluetooth audio output. A downloaded voice still needs a playback test in this browser. On iPhone and iPad, the voice says tīng ("listen") before the practice phrase to help protect its opening syllable. This cue is not part of the phrase you are learning.</p>
+      <button class="btn secondary" id="refreshVoices">Check for voices again</button>
+    </details>
     <div class="card" style="margin-top:14px">
       <div class="setrow"><div><b>Voice</b><div class="sub">Chinese voices on this device</div></div>
         <select id="voiceSelect" aria-label="Mandarin voice"></select></div>
@@ -318,7 +331,7 @@ select,input[type=range]{font-size:1rem;padding:8px;border-radius:10px;border:1p
         <div class="btn-row"><button class="btn secondary" id="cancelReset">Keep progress</button><button class="btn" id="confirmReset">Clear progress</button></div>
       </div>
     </div>
-    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.7.2</span> · All progress stays on this device.</p>
+    <p class="sub" style="margin-top:16px">Pinyin Pal <span id="appVersion">v0.7.9</span> · All progress stays on this device.</p>
   </section>
 
   <nav class="nav">

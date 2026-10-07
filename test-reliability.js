@@ -1,6 +1,49 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createSessionTimers, speechRate, acquireCurrentMic, restoreBackup, validateBackupData } = require('./app');
+const { startSpeech } = require('./app');
+const { stopSpeech } = require('./app');
+
+test('leaving pauses output and retries cancellation without cancelling a subsequent play', () => {
+  const callbacks = [], calls = [];
+  let stopped = true;
+  const synth = {speaking:true, pending:false, paused:false,
+    pause() { this.paused=true; calls.push('pause'); },
+    cancel() { calls.push('cancel'); },
+    resume() { this.paused=false; calls.push('resume'); },
+    speak(u) { calls.push(u); }};
+  stopSpeech(synth, fn => callbacks.push(fn), () => stopped);
+  assert.deepEqual(calls, ['pause','cancel']);
+  callbacks[0]();
+  assert.deepEqual(calls, ['pause','cancel','pause','cancel']);
+  stopped = false; synth.speaking = false;
+  startSpeech(synth, 'new phrase', () => {}, () => true);
+  callbacks[1]();
+  assert.deepEqual(calls, ['pause','cancel','pause','cancel','resume','new phrase']);
+});
+
+test('idle speech starts in the tap handler without an unnecessary cancellation', () => {
+  const calls = [];
+  startSpeech({speaking:false,pending:false,cancel:()=>calls.push('cancel'),speak:u=>calls.push(u)}, 'phrase',
+    () => { throw Error('Idle playback should not be delayed'); }, () => true);
+  assert.deepEqual(calls, ['phrase']);
+});
+
+test('interrupted speech waits; rapid replacement and navigation invalidate pending starts', () => {
+  const calls = [], callbacks = [];
+  const timers = createSessionTimers(fn => { callbacks.push(fn); return callbacks.length; }, () => {});
+  const synth = {speaking:true,pending:false,cancel:()=>calls.push('cancel'),speak:u=>calls.push(u)};
+  const queue = phrase => {
+    timers.cancel();
+    const revision = timers.revision;
+    startSpeech(synth, phrase, (fn, ms) => { assert.equal(ms,200); timers.later(fn,ms); }, () => timers.revision === revision);
+  };
+  queue('first'); queue('second');
+  callbacks[0](); callbacks[1]();
+  assert.deepEqual(calls, ['cancel','cancel','second']);
+  queue('leaving'); timers.cancel(); callbacks[2]();
+  assert.deepEqual(calls, ['cancel','cancel','second','cancel']);
+});
 
 test('navigation cancels audio timers, including a callback already queued by the event loop', () => {
   const callbacks = [], cancelled = [];

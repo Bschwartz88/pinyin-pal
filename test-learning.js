@@ -4,6 +4,20 @@ const { LESSONS } = require('./lessons.js');
 const { sanitizeReview, scheduleReview, duePhrases, validateBackupData } = require('./app.js');
 const day = 86400000, now = 1700000000000;
 
+test('café missions vary content without duplicate questions or repeating the previous batch', () => {
+  const { pickMissionPhrases } = require('./app.js');
+  const pool = LESSONS.find(l => l.id === 'cafe').phrases;
+  let previous = [];
+  for (let visit = 0; visit < 10; visit++) {
+    const picked = pickMissionPhrases(pool, previous, () => 0.4);
+    assert.equal(picked.length, 5);
+    assert.equal(new Set(picked.map(p => p.id)).size, 5);
+    assert.ok(picked.every(p => pool.includes(p) && !previous.includes(p.id)));
+    previous = picked.map(p => p.id);
+  }
+  assert.equal(pickMissionPhrases(pool.slice(0, 3)).length, 3);
+});
+
 test('every phrase has a unique stable ID accepted by backup validation', () => {
   const phrases = LESSONS.flatMap(l => l.phrases);
   assert.equal(new Set(phrases.map(p => p.id)).size, phrases.length);

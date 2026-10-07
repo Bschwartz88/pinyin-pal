@@ -185,7 +185,50 @@ function createSessionTimers(schedule = setTimeout, cancel = clearTimeout) {
 
 function speechRate(rate, slow = false) {
   const normal = Number.isFinite(rate) ? Math.max(0.5, Math.min(1.1, rate)) : 0.9;
-  return slow ? Math.max(0.3, normal * 0.65) : normal;
+  return slow ? Math.max(0.25, normal * 0.45) : normal;
+}
+
+function startSpeech(synth, utterance, later, isCurrent) {
+  const play = () => {
+    if (!isCurrent()) return;
+    if (synth.paused) synth.resume();
+    synth.speak(utterance);
+  };
+  if (synth.speaking || synth.pending) {
+    synth.cancel();
+    // Give an interrupted utterance time to stop before starting its replacement.
+    later(play, 200);
+  } else {
+    // Keep first playback inside the tap handler for mobile browser permissions.
+    play();
+  }
+}
+
+function stopSpeech(synth, later, isStopped) {
+  if (!synth) return;
+  const stop = () => {
+    if (!isStopped()) return;
+    // Pause active output as well as clearing the queue. Some device engines
+    // complete cancellation asynchronously; bounded retries must not stop new audio.
+    try { if (synth.speaking || synth.pending) synth.pause(); } catch {}
+    try { synth.cancel(); } catch {}
+  };
+  stop();
+  later(stop, 150);
+  later(stop, 450);
+}
+
+function pickMissionPhrases(pool, previousIds = [], random = Math.random) {
+  const mix = items => {
+    const result = [...items];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  };
+  const previous = new Set(previousIds);
+  return [...mix(pool.filter(p => !previous.has(p.id))), ...mix(pool.filter(p => previous.has(p.id)))].slice(0, 5);
 }
 
 async function acquireCurrentMic(request, isCurrent) {
@@ -216,7 +259,7 @@ function restoreBackup(storage, data) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { autoCorrelate, normalizeContour, classifyTone, escapeHtml, validateBackupData, createSessionTimers, speechRate, acquireCurrentMic, restoreBackup, sanitizeReview, scheduleReview, duePhrases };
+  module.exports = { autoCorrelate, normalizeContour, classifyTone, escapeHtml, validateBackupData, createSessionTimers, speechRate, acquireCurrentMic, restoreBackup, sanitizeReview, scheduleReview, duePhrases, startSpeech, stopSpeech, pickMissionPhrases };
 }
 if (typeof document === "undefined") { /* Node test mode */ } else { initApp(); }
 
@@ -272,6 +315,8 @@ function bumpStreak() {
 function showStreak() { document.getElementById("streakDays").textContent = store.get("streak", 0); }
 
 /* ---- TTS ---- */
+const spokenLeadIn = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+document.getElementById("speechLeadIn").hidden = !spokenLeadIn;
 const TTSm = {
   voices: [], voice: null, currentUtterance: null,
   rate: store.get("rate", 0.9),
@@ -282,21 +327,29 @@ const TTSm = {
     this.voice = window.PinyinOffline.chooseMandarinVoice(this.voices, savedURI, !navigator.onLine);
     renderVoiceSelect();
     document.getElementById("voiceNotice").classList.toggle("show", !this.voice);
+    if (!this.voice) document.getElementById("voiceHelp").open = true;
     this.status(this.voice ? (this.voice.localService ? "A device Mandarin voice is selected. Verify sound in airplane mode." : "This voice may need a connection. Choose a device voice for offline use.") : "No usable Mandarin voice found. Download a voice, then reopen the app.");
   },
   status(message) { document.getElementById("audioStatus").textContent = message; },
+  stop() {
+    Session.cancel();
+    this.currentUtterance = null;
+    const revision = Session.revision;
+    stopSpeech(window.speechSynthesis, (fn, delay) => Session.later(fn, delay),
+      () => Session.revision === revision && this.currentUtterance === null);
+  },
   speak(hanzi, { slow = false, onend = null } = {}) {
+    Session.cancel();
     try {
       this.voice = window.PinyinOffline.chooseMandarinVoice(this.voices, store.get("voiceURI", null), !navigator.onLine);
       if (!this.voice || !window.speechSynthesis) {
         this.status("Audio unavailable. Download a Mandarin voice while connected, then reopen the app.");
         document.getElementById("voiceNotice").classList.add("show");
-        document.getElementById("playbackNotice").textContent = "Audio unavailable. Open Settings to set up a Mandarin voice.";
+        document.getElementById("playbackNotice").innerHTML = 'Audio unavailable. <button class="backlink" data-go="settings">Set up Mandarin audio ›</button>';
         return;
       }
       document.getElementById("playbackNotice").textContent = "";
-      speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(hanzi);
+      const u = new SpeechSynthesisUtterance(spokenLeadIn ? "听。 " + hanzi : hanzi);
       this.currentUtterance = u;
       if (this.voice) u.voice = this.voice;
       u.lang = this.voice ? this.voice.lang : "zh-CN";
@@ -314,7 +367,8 @@ const TTSm = {
         this.status("Could not play audio. Check the selected voice and try Play again.");
         document.getElementById("playbackNotice").textContent = "Could not play audio. Try Play again or check the voice in Settings.";
       };
-      speechSynthesis.speak(u);
+      startSpeech(speechSynthesis, u, (fn, delay) => Session.later(fn, delay),
+        () => this.currentUtterance === u && Session.revision === revision);
     } catch { document.getElementById("playbackNotice").textContent = "Audio could not start. Check your voice in Settings and try Play again."; }
   },
 };
@@ -347,6 +401,7 @@ rateSlider.addEventListener("input", e => {
   document.getElementById("rateLabel").textContent = TTSm.rate <= 0.7 ? "Slow" : TTSm.rate <= 0.95 ? "Normal" : "Fast";
 });
 document.getElementById("testVoice").addEventListener("click", () => TTSm.speak("你好"));
+document.getElementById("refreshVoices").addEventListener("click", () => TTSm.load());
 const practiceMode = document.getElementById("practiceMode");
 practiceMode.value = store.get("practiceMode", "listen");
 practiceMode.addEventListener("change", () => store.set("practiceMode", practiceMode.value));
@@ -467,8 +522,7 @@ function go(name, arg) {
   screens.forEach(s => $("#screen-" + s).classList.toggle("active", s === name));
   const navName = NAV_FOR[name] || name;
   document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("active", b.dataset.go === navName));
-  if (window.speechSynthesis) speechSynthesis.cancel();
-  TTSm.currentUtterance = null;
+  TTSm.stop();
   document.getElementById("playbackNotice").textContent = "";
   if (name === "home") renderHome();
   if (name === "lessons") renderLessons();
@@ -665,8 +719,7 @@ function roundControls(scr, game, hanzi) {
   controls.querySelector("[data-slow-replay]").addEventListener("click", () => TTSm.speak(hanzi, { slow: true }));
   controls.querySelector("[data-next]").addEventListener("click", () => {
     Session.cancel();
-    if (window.speechSynthesis) speechSynthesis.cancel();
-    TTSm.currentUtterance = null;
+    TTSm.stop();
     game.next();
     const heading = scr.querySelector("h2, .bigscore");
     if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
@@ -680,7 +733,8 @@ function choiceRound(game, scr, { title, back }) {
   game.mode = !game.forceListen && store.get("practiceMode", "listen") === "mixed" && Math.random() < 0.5 ? "read" : "listen";
   const prompt = game.mode === "listen"
     ? `<p class="sub">Round ${game.round} of ${game.total} — what does it mean?</p>
-       <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button><button class="btn secondary" id="qSlow" style="margin-top:10px">🐢 Play slowly</button>`
+       <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button><button class="btn secondary" id="qSlow" style="margin-top:10px">🐢 Play slowly</button>
+       ${spokenLeadIn ? '<p class="sub" style="margin-top:12px">First you’ll hear <b>“tīng” (“listen”)</b>, then the phrase. You don’t need to repeat “tīng.”</p>' : ''}`
     : `<p class="sub">Round ${game.round} of ${game.total} — how do you say…</p>
        <div class="bigword" style="margin:12px 0"><div style="font-size:1.6rem;font-weight:800">“${cur.en}”</div></div>`;
   quizShell(scr, { title, back, round: game.round, total: game.total, score: game.score, body: `${game.context ? `<p class="sub">${escapeHtml(game.context)}</p>` : ""}${prompt}
@@ -693,7 +747,6 @@ function choiceRound(game, scr, { title, back }) {
   if (game.mode === "listen") {
     $("#qPlay").addEventListener("click", () => TTSm.speak(cur.hz, {}));
     $("#qSlow").addEventListener("click", () => TTSm.speak(cur.hz, { slow: true }));
-    Session.later(() => TTSm.speak(cur.hz, {}), 350);
   }
   scr.querySelectorAll("#qChoices .choice").forEach(el =>
     el.addEventListener("click", () => {
@@ -734,15 +787,16 @@ const ListeningGame = {
     const due = duePhrases(this.pool, records, Date.now());
     const planted = this.pool.filter(p => records[p.id]).length;
     this.queue = kind === "mission"
-      ? ["你想喝什么", "热的还是冰的", "要加糖吗", "在这里喝还是带走", "你的咖啡好了"].map(hz => LESSONS.find(l => l.id === "cafe").phrases.find(p => p.hz === hz))
+      ? pickMissionPhrases(LESSONS.find(l => l.id === "cafe").phrases, this.previousMissionIds)
       : due.slice(0, 5);
     this.title = kind === "mission" ? "☕ Café Mission" : "🌱 Listening Garden";
     scr.innerHTML = `<h2>${this.title}</h2><div class="card" style="margin-top:16px">
-      <p>${kind === "mission" ? "Step into a café. Hear five things a barista might say and pick their meanings. Replay as often as you like." : due.length ? `${due.length} ${due.length === 1 ? "phrase is" : "phrases are"} ready to revisit. This short round starts with phrases that need more practice.` : "Nothing is due right now. Listening answers in lessons and Word Match plant phrases here. Missed phrases return in about 10 minutes; correct ones return after a day, then at longer intervals."}</p>
+      <p>${kind === "mission" ? "Step into a café. Hear five phrases from customers and baristas and pick their meanings. Each new round draws a different selection from 12 phrases during this visit. Replay as often as you like." : due.length ? `${due.length} ${due.length === 1 ? "phrase is" : "phrases are"} ready to revisit. This short round starts with phrases that need more practice.` : "Nothing is due right now. Listening answers in lessons and Word Match plant phrases here. Missed phrases return in about 10 minutes; correct ones return after a day, then at longer intervals."}</p>
       ${this.queue.length ? `<button class="btn big" id="listeningStart" style="margin-top:16px">Start ${this.queue.length} ${this.queue.length === 1 ? "question" : "questions"}</button>` : '<button class="btn" data-go="wordgame">Plant some phrases</button>'}
       ${kind === "mission" ? '<p><button class="backlink" data-go="lesson" data-arg="cafe">Meet the café phrases first ›</button></p>' : ""}
       <p class="sub">${kind === "review" ? `${planted} ${planted === 1 ? "phrase" : "phrases"} planted. ` : ""}No timer. Each answer helps you learn.</p></div>`;
     scr.querySelector("#listeningStart")?.addEventListener("click", () => {
+      if (this.kind === "mission") this.previousMissionIds = this.queue.map(p => p.id);
       this.total = this.queue.length; this.round = 0; this.score = 0; this.next();
     }, { once: true });
   },
@@ -756,7 +810,8 @@ const ListeningGame = {
       return;
     }
     this.current = this.queue[this.round - 1];
-    this.context = this.kind === "mission" ? ["You reach the counter. The barista asks…", "The barista checks your order…", "One more question before making your drink…", "Before you pay, the barista asks…", "A moment later, the barista calls out…"][this.round - 1] : "Listen, take your time, and choose a meaning.";
+    const customerPhrases = ["我要一杯咖啡", "不要糖", "少放一点冰", "可以刷卡吗"];
+    this.context = this.kind === "mission" ? (customerPhrases.includes(this.current.hz) ? "At the café, a customer says…" : "At the café, the barista says…") : "Listen, take your time, and choose a meaning.";
     choiceRound(this, scr, { title: this.title, back: this.kind });
   }
 };
@@ -1204,7 +1259,7 @@ const SpeakGame = {
     if (this.recording || this.pending) return;
     const requestId = ++this.requestId;
     this.pending = true;
-    if (window.speechSynthesis) speechSynthesis.cancel();
+    TTSm.stop();
     if (!(await this.ensureMic(requestId))) { if (this.requestId === requestId) this.pending = false; return; }
     try { if (this.audioCtx.state === "suspended") await this.audioCtx.resume(); }
     catch { this.stopMic(); return; }
@@ -1295,14 +1350,13 @@ if (soundFold) {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     Session.cancel(); SpeakGame.stopMic();
-    if (window.speechSynthesis) speechSynthesis.cancel();
-    TTSm.currentUtterance = null;
+    TTSm.stop();
   }
 });
 window.addEventListener("pagehide", () => {
   Session.cancel();
   SpeakGame.stopMic();
-  if (window.speechSynthesis) speechSynthesis.cancel();
+  TTSm.stop();
 });
 
 // Offline installation and explicit update controls live in offline.js.

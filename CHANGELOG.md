@@ -1,5 +1,33 @@
 # Changes
 
+## 0.7.9 — Stop speech on leaving
+
+- Centralized speech stopping for navigation, Next, backgrounding and microphone recording.
+- Pause active output, clear the queue, and retry cancellation twice while still stopped. New playback invalidates the retries and resumes the engine if needed.
+- iPhone retesting required: the user reported that the previous cancellation-only approach continued speaking after Home.
+
+## 0.7.7 — Spoken lead-in trial
+
+- Removed the separate ready tone after device testing still found clipped syllables.
+- On iPhone/iPad, a clearly labeled tīng ("listen") cue now precedes the target phrase inside the same speech utterance. No extra delay is imposed on idle speech. Device retesting remains necessary.
+
+## 0.7.6 — Café variety and audio trial
+
+- Café Mission selects five distinct phrases from all 12 café entries, avoiding the previous batch during the current page session. Speaker prompts now distinguish customer and barista phrases.
+- Added an iPhone/iPad ready tone and 350 ms lead-in as a trial mitigation for clipped starts. Device verification remains required; delayed speech is cancelled on navigation or another play request.
+
+## 0.7.5 — iPhone playback follow-up
+
+- Listening questions wait for a Play tap instead of starting automatic audio that can compete with it.
+- Idle playback no longer cancels speech unnecessarily. Replacing active speech waits 200 ms; navigation or a later tap cancels pending starts.
+- Physical iPhone retesting is needed to establish whether the reported clipped starts are resolved.
+
+## 0.7.4 — Guided testing feedback
+
+- Slower beginner replay throughout the app; normal playback is unchanged.
+- Added voice setup instructions, a direct setup button in the missing-audio warning, and a voice refresh control.
+- Clarified that Mandarin voice installation does not change the device language and that refreshing may be needed after download.
+
 ## 0.7.2 — Everyday listening
 
 - Added 24 phrase entries across café and conversation-repair lessons: 19 lessons, 271 lesson phrases and 286 phrasebook entries total.
