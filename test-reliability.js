@@ -98,6 +98,17 @@ test('backup failure rolls back earlier writes and never reports success', () =>
   assert.equal(data.get('pp_streak'), '5');
 });
 
+test('restoring a cafe score preserves the exact backup value in both directions', () => {
+  for (const [existing, saved] of [[4,3], [3,4], [3,3]]) {
+    const values = new Map([['pp_lessonScores', JSON.stringify({cafe:existing, hello:6})]]);
+    const storage = {getItem:k=>values.get(k) ?? null, setItem:(k,v)=>values.set(k,v), removeItem:k=>values.delete(k)};
+    const backup = JSON.parse(JSON.stringify({lessonScores:{cafe:saved, hello:6}}));
+    assert.deepEqual(restoreBackup(storage, backup), {ok:true});
+    assert.deepEqual(JSON.parse(values.get('pp_lessonScores')), {cafe:saved, hello:6});
+    assert.equal(backup.lessonScores.cafe, saved);
+  }
+});
+
 test('unavailable storage or failed rollback is reported; old backups still work', () => {
   const unavailable = {getItem: () => null, setItem: () => {throw Error('blocked');}, removeItem: () => {throw Error('blocked');}};
   assert.deepEqual(restoreBackup(unavailable, {streak:2}), {ok:false,reason:'storage',rolledBack:false});

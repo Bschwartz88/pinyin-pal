@@ -23,7 +23,7 @@ Personal Mandarin learning app for iPad/iPhone — pinyin only, no characters. R
 | `data.js` | tone / sound-practice content |
 | `app.js` | app logic |
 | `sw.js`, `offline.js` | scoped cache, voice selection and update controls |
-| `test.js`, `test-reliability.js`, `test-offline.js` | content, storage, microphone, playback and cache regression checks |
+| `test.js`, `test-reliability.js`, `test-learning.js`, `test-offline.js` | content, storage, microphone, playback and cache regression checks |
 
 ## Development and checks
 

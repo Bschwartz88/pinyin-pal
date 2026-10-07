@@ -3,3 +3,8 @@ REVIEW.md
 IPHONE-TESTING.md
 *-preview.png
 PR-BODY.md
+# Device progress exports and private recovery checkpoints must stay local.
+pinyin-pal-backup*.json
+*.bundle
+HANDOFF.md
+PRIVACY-CLEANUP.md
