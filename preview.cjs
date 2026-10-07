@@ -8,7 +8,7 @@ if (host !== '127.0.0.1' && (!privateAddress || !localAddresses.includes(host)))
   throw new Error('Preview host must be loopback or a private IPv4 address assigned to this computer.');
 }
 const port = host === '127.0.0.1' ? 4173 : 4174;
-const allowed = new Set(['index.html','app.js','offline.js','sw.js','data.js','lessons.js','manifest.json','icon-192.png','icon-512.png']);
+const allowed = new Set(['index.html','app.js','offline.js','sw.js','data.js','lessons.js','manifest.json','icon-192.png','icon-512.png','audio-check.html','audio-check.js']);
 const types = {html:'text/html',js:'text/javascript',json:'application/json',png:'image/png'};
 http.createServer((req,res) => {
   const path = new URL(req.url,'http://localhost').pathname;
