@@ -2,7 +2,7 @@
 
 Personal Mandarin learning app for iPad/iPhone — pinyin only, no characters. Runs as a website (bookmark it, or add to the home screen).
 
-## What's inside (v0.7)
+## What's inside (v0.8.0)
 
 - **Lessons** — 19 short lessons on everyday basics, including café orders and asking for repetition or help. Each one explains the phrases word by word, adds a few "how Chinese works" notes, and ends with a 6-question **Try it** check. Progress and a "continue" card are saved on the device.
 - **Phrasebook** — 286 entries, tap to hear, 🐢 for slow.
@@ -31,8 +31,16 @@ Use `npm test` for all checks and `npm run preview` for a loopback-only preview 
 
 ## Optional offline setup
 
-Settings has folded-away home-screen instructions and an explicit update/restart control. Offline speech requires a downloaded Mandarin device voice. Real iPhone audio testing is deferred until the core release is stable. A cached-files message does not certify audible offline playback. Pitch Painter is an experimental pitch visualization, not a validated pronunciation assessment.
+Settings has folded-away home-screen instructions and an explicit update/restart control. Offline speech requires a downloaded Mandarin device voice. Physical iPhone offline qualification remains deferred; online device tests do not establish offline reliability. A cached-files message does not certify audible offline playback. Pitch Painter is an experimental pitch visualization, not a validated pronunciation assessment.
 
 ## Editing lesson content
 
 Add or change phrases in `lessons.js`. Each phrase needs `hz` (Chinese, used only for the voice), `py` (pinyin shown on screen) and `en`; optional `parts` (word-by-word breakdown, also used as game tiles) and `tip`. Run `node test.js` afterwards.
+
+## Release status and follow-up
+
+Live app: https://bschwartz88.github.io/pinyin-pal/
+
+Opening speech can still clip or click on iPhone, including with headphones and multiple Mandarin voices. The clearly labeled tīng (listen) cue is a partial workaround, not a resolved fix. This is accepted as an open issue for this release. The isolated comparison remains available at https://bschwartz88.github.io/pinyin-pal/audio-check.html .
+
+See [maintenance and deferred work](MAINTENANCE.md) for reproduction steps, release verification, rollback and the next investigation. See [security notes](SECURITY.md) for the completed review and its limits.

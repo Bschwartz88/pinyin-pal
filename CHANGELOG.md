@@ -1,5 +1,14 @@
 # Changes
 
+## 0.8.0 — Reviewed release (2026-10-08)
+
+- Release the beginner listening, vocabulary, accessibility, backup and navigation improvements described below.
+- Guided iPhone testing confirmed saved scores, import/export, slower replay and stopping speech on Home/background.
+- Opening speech artifact remains reproducible across voices and headphones; retained as a documented future fix. Offline iPhone qualification is also deferred.
+- Completed scoped runtime/repository security review, neutralized active historical identities, protected main and excluded private audit workspaces. Retained GitHub objects remain a separate privacy follow-up.
+- Added security and maintenance documentation, with a versioned cache update that preserves progress.
+
+
 ## 0.7.9 — Stop speech on leaving
 
 - Centralized speech stopping for navigation, Next, backgrounding and microphone recording.

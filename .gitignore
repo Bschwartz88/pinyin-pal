@@ -8,3 +8,6 @@ pinyin-pal-backup*.json
 *.bundle
 HANDOFF.md
 PRIVACY-CLEANUP.md
+
+# Private audit workspaces must never be committed.
+.privacy-work/

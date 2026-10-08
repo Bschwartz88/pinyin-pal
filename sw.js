@@ -1,5 +1,5 @@
 // Bump VERSION whenever an app asset changes. Cache each release as a unit.
-const VERSION = "v0.7.9";
+const VERSION = "v0.8.0";
 const PREFIX = `pinyin-pal:${self.registration.scope}:`;
 const CACHE = PREFIX + VERSION;
 const ASSETS = ["./", "index.html", "app.js", "offline.js", "data.js", "lessons.js", "manifest.json", "icon-192.png", "icon-512.png"];
