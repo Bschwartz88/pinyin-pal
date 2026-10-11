@@ -5,7 +5,7 @@ const el = id => document.getElementById(id);
 let voices = [], current = null, stopping = false, stopTimer;
 function controls() {
   el("play").disabled = !!current || stopping || !voices.length;
-  for (const id of ["voice", "phrase", "cue", "speed", "refresh"]) el(id).disabled = !!current || stopping;
+  for (const id of ["voice", "phrase", "speed", "refresh"]) el(id).disabled = !!current || stopping;
 }
 function loadVoices() {
   if (current || stopping) return;
@@ -39,7 +39,7 @@ el("play").addEventListener("click", () => {
   if (!synth || current || stopping) return;
   const voice = voices.find(v => v.voiceURI === el("voice").value);
   if (!voice) return;
-  const utterance = new SpeechSynthesisUtterance(el("cue").value + el("phrase").value);
+  const utterance = new SpeechSynthesisUtterance(el("phrase").value);
   utterance.voice = voice;
   utterance.lang = voice.lang;
   utterance.rate = Number(el("speed").value);

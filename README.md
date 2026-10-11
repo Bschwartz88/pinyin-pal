@@ -2,7 +2,7 @@
 
 Personal Mandarin learning app for iPad/iPhone — pinyin only, no characters. Runs as a website (bookmark it, or add to the home screen).
 
-## What's inside (v0.8.0)
+## What's inside (v0.8.1)
 
 - **Lessons** — 19 short lessons on everyday basics, including café orders and asking for repetition or help. Each one explains the phrases word by word, adds a few "how Chinese works" notes, and ends with a 6-question **Try it** check. Progress and a "continue" card are saved on the device.
 - **Phrasebook** — 286 entries, tap to hear, 🐢 for slow.
@@ -41,6 +41,6 @@ Add or change phrases in `lessons.js`. Each phrase needs `hz` (Chinese, used onl
 
 Live app: https://bschwartz88.github.io/pinyin-pal/
 
-Opening speech can still clip or click on iPhone, including with headphones and multiple Mandarin voices. The clearly labeled tīng (listen) cue is a partial workaround, not a resolved fix. This is accepted as an open issue for this release. The isolated comparison remains available at https://bschwartz88.github.io/pinyin-pal/audio-check.html .
+Opening speech can still clip or click on iPhone, including with headphones and multiple Mandarin voices. The experimental spoken listen cue was removed globally in v0.8.1; playback now starts directly with the practice phrase. This is accepted as an open issue for this release. The isolated comparison remains available at https://bschwartz88.github.io/pinyin-pal/audio-check.html .
 
 See [maintenance and deferred work](MAINTENANCE.md) for reproduction steps, release verification, rollback and the next investigation. See [security notes](SECURITY.md) for the completed review and its limits.

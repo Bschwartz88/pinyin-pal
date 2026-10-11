@@ -8,7 +8,7 @@ body{font:18px/1.5 system-ui,sans-serif;background:#faf8f3;color:#243d36;max-wid
 </style>
 <h1>Check the opening syllable</h1>
 <p>This separate check helps us compare your phone’s voices. It does not change game settings or scores.</p>
-<p>Use the iPhone speaker. Start with <b>Phrase only</b>. Listen for the first word, let the phrase finish, then wait five seconds before replaying. Compare with the <b>“listen” cue</b> and another Mandarin voice if available.</p>
+<p>Use the iPhone speaker. Listen for the first word, let the phrase finish, then wait five seconds before replaying. Compare another Mandarin voice if available.</p>
 <label for="voice">Mandarin voice</label><select id="voice"></select>
 <button id="refresh" type="button">Check voices again</button>
 <label for="phrase">Phrase</label>
@@ -17,7 +17,6 @@ body{font:18px/1.5 system-ui,sans-serif;background:#faf8f3;color:#243d36;max-wid
 <option value="我要一杯咖啡" selected>wǒ yào yì bēi kāfēi — I’d like a cup of coffee</option>
 <option value="你的咖啡好了">nǐ de kāfēi hǎo le — your coffee is ready</option>
 </select>
-<label for="cue">Opening</label><select id="cue"><option value="">Phrase only</option><option value="听。 ">With tīng (“listen”) cue</option></select>
 <label for="speed">Speed</label><select id="speed"><option value="0.9">Normal</option><option value="0.405">Slow</option></select>
 <button id="play" type="button">▶ Play phrase</button><button id="stop" type="button">Stop</button>
 <p id="status" role="status" aria-live="polite">Loading voices…</p>

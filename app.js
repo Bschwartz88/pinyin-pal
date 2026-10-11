@@ -315,8 +315,6 @@ function bumpStreak() {
 function showStreak() { document.getElementById("streakDays").textContent = store.get("streak", 0); }
 
 /* ---- TTS ---- */
-const spokenLeadIn = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-document.getElementById("speechLeadIn").hidden = !spokenLeadIn;
 const TTSm = {
   voices: [], voice: null, currentUtterance: null,
   rate: store.get("rate", 0.9),
@@ -349,7 +347,7 @@ const TTSm = {
         return;
       }
       document.getElementById("playbackNotice").textContent = "";
-      const u = new SpeechSynthesisUtterance(spokenLeadIn ? "听。 " + hanzi : hanzi);
+      const u = new SpeechSynthesisUtterance(hanzi);
       this.currentUtterance = u;
       if (this.voice) u.voice = this.voice;
       u.lang = this.voice ? this.voice.lang : "zh-CN";
@@ -733,8 +731,7 @@ function choiceRound(game, scr, { title, back }) {
   game.mode = !game.forceListen && store.get("practiceMode", "listen") === "mixed" && Math.random() < 0.5 ? "read" : "listen";
   const prompt = game.mode === "listen"
     ? `<p class="sub">Round ${game.round} of ${game.total} — what does it mean?</p>
-       <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button><button class="btn secondary" id="qSlow" style="margin-top:10px">🐢 Play slowly</button>
-       ${spokenLeadIn ? '<p class="sub" style="margin-top:12px">First you’ll hear <b>“tīng” (“listen”)</b>, then the phrase. You don’t need to repeat “tīng.”</p>' : ''}`
+       <button class="btn jade big" id="qPlay" style="margin-top:14px">🔊 Play it</button><button class="btn secondary" id="qSlow" style="margin-top:10px">🐢 Play slowly</button>`
     : `<p class="sub">Round ${game.round} of ${game.total} — how do you say…</p>
        <div class="bigword" style="margin:12px 0"><div style="font-size:1.6rem;font-weight:800">“${cur.en}”</div></div>`;
   quizShell(scr, { title, back, round: game.round, total: game.total, score: game.score, body: `${game.context ? `<p class="sub">${escapeHtml(game.context)}</p>` : ""}${prompt}

@@ -1,5 +1,12 @@
 # Changes
 
+## 0.8.1 — Remove spoken cue (2026-10-11)
+
+- Removed the experimental spoken tīng prefix globally, including the audio comparison page, and removed its instructional labels.
+- Practice phrases now play directly at normal and slow speeds. Curriculum words containing tīng are unchanged.
+- Opening clipping remains an accepted known issue for future work; no new audio workaround added.
+
+
 ## 0.8.0 — Reviewed release (2026-10-08)
 
 - Release the beginner listening, vocabulary, accessibility, backup and navigation improvements described below.
