@@ -1,5 +1,12 @@
 # Changes
 
+## 0.8.2 — Readable labels (unreleased, 2026-10-26)
+
+- Card tags on Home are now sentence case at a larger size instead of small spaced capitals.
+- Darkened the gold, green and red tag text, and the "up next" marker in the lesson list, to meet the 4.5:1 contrast minimum. Colours stay in the same families.
+- The Lessons card tag now reads "Step by step" instead of repeating the card title.
+- Version and service-worker cache bumped so existing devices pick up the change. No lesson content, progress keys or audio behaviour changed.
+
 ## 0.8.1 — Remove spoken cue (2026-10-11)
 
 - Removed the experimental spoken tīng prefix globally, including the audio comparison page, and removed its instructional labels.

@@ -588,7 +588,7 @@ function renderHome() {
     box.innerHTML = `
       <div class="card continue" data-go="lesson" data-arg="${escapeHtml(next.id)}">
         <div class="emoji" style="font-size:2rem">${next.emoji}</div>
-        <div><span class="tag" style="background:#fdf3e3;color:#b07d1e">${done ? "Continue" : "Start here"}</span>
+        <div><span class="tag" style="background:#fdf3e3;color:#8a5f12">${done ? "Continue" : "Start here"}</span>
           <h2>Lesson ${idx}: ${escapeHtml(next.title)}</h2><div class="best">${next.phrases.length} phrases · about 5 minutes</div></div>
         <div class="go">Go ›</div>
       </div>`;
@@ -613,7 +613,7 @@ function renderLessons() {
         return `<div class="lessonrow${l === next ? " next" : ""}" data-go="lesson" data-arg="${escapeHtml(l.id)}">
           <div class="num">${l.emoji}</div>
           <div><div class="ttl">${i + 1}. ${escapeHtml(l.title)}</div>
-            <div class="meta">${l.phrases.length} phrases${scDisplay}${l === next ? " · <b style='color:#b07d1e'>up next</b>" : ""}</div></div>
+            <div class="meta">${l.phrases.length} phrases${scDisplay}${l === next ? " · <b style='color:#8a5f12'>up next</b>" : ""}</div></div>
           <div class="done">${done ? "✓" : "›"}</div>
         </div>`; }).join("")}
     </div>`;
